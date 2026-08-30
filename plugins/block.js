@@ -20,7 +20,6 @@ async function saveBlockedListToMongo(chats) {
     }
 }
 
-// Startup-දී MongoDB එකෙන් බ්ලොක් ලිස්ට් එක කෑෂ් එකට ලෝඩ් කරගැනීම
 async function loadBlockedChats() {
     try {
         let doc = await BlockModel.findOne({ _id: 'sachiyamd_blocks' });
@@ -117,11 +116,11 @@ cmd({
     }
 });
 
-// 3. BLOCKLIST COMMAND (View all blocked groups/chats & manage interactively)
+// 3. BLOCKLIST COMMAND (With accurate Group Names & User IDs)
 cmd({
     pattern: "blocklist",
     alias: ["blockedchats"],
-    desc: "View all blocked chats and groups",
+    desc: "View all blocked chats and groups with names",
     category: "owner",
     react: "📋",
     filename: __filename
@@ -156,9 +155,28 @@ cmd({
                        `┃\n`;
 
         for (let i = 0; i < blockedList.length; i++) {
-            let type = blockedList[i].includes('@g.us') ? '👥 Group' : '👤 User/Chat';
-            listText += `┃ *[${i + 1}]* ${type}\n` +
-                        `┃      ID: \`${blockedList[i]}\`\n`;
+            let chatId = blockedList[i];
+            let displayName = "Unknown Chat";
+            let typeIcon = "👤";
+
+            if (chatId.includes('@g.us')) {
+                typeIcon = "👥";
+                try {
+                    let groupMeta = await sock.groupMetadata(chatId);
+                    displayName = groupMeta && groupMeta.subject ? groupMeta.subject : "Unnamed Group";
+                } catch (err) {
+                    displayName = "Protected / Left Group";
+                }
+            } else {
+                typeIcon = "👤";
+                displayName = chatId.split('@')[0];
+            }
+
+            // Clean up name characters to prevent UI breaks
+            let cleanName = displayName.replace(/[\*\_\~\[\]\`]/g, '');
+
+            listText += `┃ *[${i + 1}]* ${typeIcon} *${cleanName}*\n` +
+                        `┃      ID: \`${chatId}\`\n`;
         }
 
         listText += `┃\n` +
