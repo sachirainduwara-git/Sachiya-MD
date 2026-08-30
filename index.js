@@ -250,7 +250,7 @@ async function connectToWA() {
     },
     syncFullHistory: false,
     fireInitQueries: false, 
-    markOnlineOnConnect: false,
+    markOnlineOnConnect: true, // 👈 මන්න මෙතන true කළා (Active ලස්ට එක පෙන්වන්න)
     generateHighQualityLinkPreview: false,
     shouldSyncHistoryMessage: () => false,
     getMessage: async (key) => {
@@ -314,7 +314,7 @@ async function connectToWA() {
         global.hasLoggedConsoleOnce = true;
         console.log('\n╭─────────────────────────────────────╮');
         console.log('│ SACHIYA MD CONNECTED SUCCESSFULLY!  │');
-        console.log('╰─────────────────────────────────────╯\n');
+        console.log('╰─────────────────────────────────────\n');
       }
 
       await saveSessionToMongo();
@@ -560,6 +560,7 @@ async function connectToWA() {
       
       const isGroup = from.endsWith('@g.us');
       const rawSender = isGroup ? (mek.key.participant || mek.participant) : from;
+      componetSender = jidNormalizedUser(rawSender || from);
       const sender = jidNormalizedUser(rawSender || from);
       const senderNumber = sender ? sender.split('@')[0] : '';
 
