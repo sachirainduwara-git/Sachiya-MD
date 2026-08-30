@@ -249,9 +249,10 @@ async function connectToWA() {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     syncFullHistory: false,
-    fireInitQueries: true, 
+    fireInitQueries: false, 
     markOnlineOnConnect: false,
     generateHighQualityLinkPreview: false,
+    shouldSyncHistoryMessage: () => false,
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
