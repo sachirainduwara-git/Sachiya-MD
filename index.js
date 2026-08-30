@@ -13,7 +13,6 @@ const express = require('express');
 const path = require('path');
 const mongoose = require('mongoose');
 const http = require('http');
-const NodeCache = require('node-cache');
 
 const config = require('./config');
 const { sms } = require('./lib/msg');
@@ -240,7 +239,6 @@ async function connectToWA() {
 
   // 🛠️ FIXED SOCKET OPTIONS & ROBUST MESSAGE STORE FOR SMOOTH DECRYPTION & REACTS
   const messageInMemoryStore = new Map();
-  const msgRetryCounterCache = new NodeCache();
 
   const sachiya = makeWASocket({
     logger,
@@ -250,7 +248,6 @@ async function connectToWA() {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    msgRetryCounterCache,
     syncFullHistory: false,
     fireInitQueries: false, 
     markOnlineOnConnect: true,
