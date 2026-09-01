@@ -320,6 +320,11 @@ async function connectToWA() {
       await saveSessionToMongo();
       await loadBlockedListIntoCache();
 
+      // 🟢 Bot එක ඔන්ලයින් (Available) ලෙස තබාගැනීමට ප්‍රෙෂන්ස් අප්ඩේට් කිරීම
+      try {
+        await sachiya.sendPresenceUpdate('available');
+      } catch (e) {}
+
       if (!global.hasSentBootMessage) {
         global.hasSentBootMessage = true;
 
