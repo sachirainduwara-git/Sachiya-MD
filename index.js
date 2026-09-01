@@ -235,7 +235,6 @@ async function connectToWA() {
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
-  // 🛠️ ROBUST MESSAGE STORE FOR MEDIA & AUDIO FIX
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -512,8 +511,8 @@ async function connectToWA() {
                       (msgType === 'imageMessage') ? mek.message.imageMessage.caption :
                       (msgType === 'videoMessage') ? mek.message.videoMessage.caption :
                       (msgType === 'audioMessage') ? "audio" :
-                      (msg.message?.listResponseMessage?.title) ? mek.message.listResponseMessage.title :
-                      (msg.message?.buttonsResponseMessage?.selectedButtonId) ? mek.message.buttonsResponseMessage.selectedButtonId :
+                      (mek.message?.listResponseMessage?.title) ? mek.message.listResponseMessage.title :
+                      (mek.message?.buttonsResponseMessage?.selectedButtonId) ? mek.message.buttonsResponseMessage.selectedButtonId :
                       mek.text || '';
       
       const bodyText = rawBody ? String(rawBody) : '';
