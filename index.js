@@ -243,10 +243,13 @@ async function connectToWA() {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     syncFullHistory: false,
-    fireInitQueries: false, 
+    fireInitQueries: true,            // ⚡ මෙන්න මේක දාලා සර්වර් එකේ කනෙක්ෂන් ඉනිෂියල් ප්‍රශ්න විසඳුවා
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
     shouldSyncHistoryMessage: () => false,
+    connectTimeoutMs: 60000,          // ⚡ කනෙක්ෂන් ටයිම්අවුට් එක වැඩි කළා
+    defaultQueryTimeoutMs: 0,         // ⚡ කෝල් සහ කුරි හිරවීම් වළක්වන්න දැම්මා
+    keepAliveIntervalMs: 10000,       // ⚡ සර්වර් එකත් එක්ක ලින්ක් එක අලුත් කර කර තියාගන්න 
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
