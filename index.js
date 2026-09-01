@@ -26,9 +26,6 @@ const { handleAutoStatus } = require('./plugins/autostatus');
 
 global.activeSettingsMenus = global.activeSettingsMenus || new Map();
 
-// ⚡ Ultra Fast Bot Start Timestamp to Ignore Old Synced Messages
-const botStartTime = Date.now();
-
 const app = express();
 const port = process.env.PORT || 8000;
 
@@ -232,13 +229,13 @@ async function connectToWA() {
     fs.mkdirSync(authFolder, { recursive: true });
   }
 
-  // 🛠️ FIXED: Ensure session is fully loaded from MongoDB BEFORE initializing Baileys connection
   await loadSessionFromMongo();
   await loadBlockedListIntoCache();
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
+  // 🛠️ ROBUST MESSAGE STORE FOR MEDIA & AUDIO FIX
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -257,9 +254,10 @@ async function connectToWA() {
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
-        return messageInMemoryStore.get(msgId);
+        const msg = messageInMemoryStore.get(msgId);
+        if (msg) return msg;
       }
-      return { conversation: "Hello, I am SACHIYA-MD!" };
+      return { conversation: "SACHIYA-MD Audio/Media Container" };
     }
   });
 
@@ -386,7 +384,7 @@ async function connectToWA() {
       // Store message in memory for getMessage lookup fix
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
-        if (messageInMemoryStore.size > 500) {
+        if (messageInMemoryStore.size > 1000) {
           const firstKey = messageInMemoryStore.keys().next().value;
           messageInMemoryStore.delete(firstKey);
         }
@@ -513,8 +511,9 @@ async function connectToWA() {
                       (msgType === 'extendedTextMessage') ? mek.message.extendedTextMessage.text :
                       (msgType === 'imageMessage') ? mek.message.imageMessage.caption :
                       (msgType === 'videoMessage') ? mek.message.videoMessage.caption :
-                      (mek.message?.listResponseMessage?.title) ? mek.message.listResponseMessage.title :
-                      (mek.message?.buttonsResponseMessage?.selectedButtonId) ? mek.message.buttonsResponseMessage.selectedButtonId :
+                      (msgType === 'audioMessage') ? "audio" :
+                      (msg.message?.listResponseMessage?.title) ? mek.message.listResponseMessage.title :
+                      (msg.message?.buttonsResponseMessage?.selectedButtonId) ? mek.message.buttonsResponseMessage.selectedButtonId :
                       mek.text || '';
       
       const bodyText = rawBody ? String(rawBody) : '';
@@ -568,13 +567,15 @@ async function connectToWA() {
       const reply = (text) => sachiya.sendMessage(from, { text }, { quoted: mek });
 
       const cmd = commands.find((c) => c.pattern === commandName || (c.alias && c.alias.includes(commandName)));
-      if (cmd.react) await sachiya.sendMessage(from, { react: { text: cmd.react, key: mek.key } }).catch(() => {});
-      try {
-        await cmd.function(sachiya, mek, m, {
-          from, quoted, body, isCmd, command: commandName, args, q, reply, isGroup, sender, senderNumber, isOwner
-        });
-      } catch (e) {
-        console.error("[PLUGIN ERROR]", e);
+      if (cmd) {
+        if (cmd.react) await sachiya.sendMessage(from, { react: { text: cmd.react, key: mek.key } }).catch(() => {});
+        try {
+          await cmd.function(sachiya, mek, m, {
+            from, quoted, body, isCmd, command: commandName, args, q, reply, isGroup, sender, senderNumber, isOwner
+          });
+        } catch (e) {
+          console.error("[PLUGIN ERROR]", e);
+        }
       }
     } catch (err) {
       if (!handleSilentErrors(err)) {
