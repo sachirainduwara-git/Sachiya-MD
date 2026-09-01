@@ -243,13 +243,13 @@ async function connectToWA() {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     syncFullHistory: false,
-    fireInitQueries: true,            // ⚡ මෙන්න මේක දාලා සර්වර් එකේ කනෙක්ෂන් ඉනිෂියල් ප්‍රශ්න විසඳුවා
+    fireInitQueries: true, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
     shouldSyncHistoryMessage: () => false,
-    connectTimeoutMs: 60000,          // ⚡ කනෙක්ෂන් ටයිම්අවුට් එක වැඩි කළා
-    defaultQueryTimeoutMs: 0,         // ⚡ කෝල් සහ කුරි හිරවීම් වළක්වන්න දැම්මා
-    keepAliveIntervalMs: 10000,       // ⚡ සර්වර් එකත් එක්ක ලින්ක් එක අලුත් කර කර තියාගන්න 
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0,
+    keepAliveIntervalMs: 10000,
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -379,6 +379,9 @@ async function connectToWA() {
 
   sachiya.ev.on('messages.upsert', async (chatUpdate) => {
     try {
+      // ⚡ මෙතන චැට් අප්ඩේට් එකේ type එක notification එකක් හෝ history එකක් වුණොත් මැසේජ් හැング වෙන්න පුළුවන් නිසා 'notify' ටයිප් එකට හෝ ඇතුළට එන මැසේජ් වලට පමණක් වැඩ කරන විදිහට බලමු
+      if (chatUpdate.type !== 'notify') return;
+
       const mek = chatUpdate.messages ? chatUpdate.messages[0] : chatUpdate[0];
       if (!mek || !mek.message) return;
 
