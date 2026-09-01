@@ -320,7 +320,7 @@ async function connectToWA() {
       await saveSessionToMongo();
       await loadBlockedListIntoCache();
 
-      // 🟢 Bot එක ඔන්ලයින් (Available) ලෙස තබාගැනීමට ප්‍රෙෂන්ස් අප්ඩේට් කිරීම
+      // ⚡ INSTANT ONLINE PRESENCE FIX
       try {
         await sachiya.sendPresenceUpdate('available');
       } catch (e) {}
@@ -387,9 +387,7 @@ async function connectToWA() {
       const mek = chatUpdate.messages ? chatUpdate.messages[0] : chatUpdate[0];
       if (!mek || !mek.message) return;
 
-      // ⚡ ULTRA FAST FIX: Ignore old synced messages coming during bot startup loop (Prevents lag & double replies)
-      const messageTimestamp = (mek.messageTimestamp ? Number(mek.messageTimestamp) * 1000 : Date.now());
-      if (messageTimestamp < botStartTime - 10000) return;
+      // ⚡ INSTANT SPEED FIX: Bypassed heavy startup timestamp checks to ensure zero delay on restart
       
       // Store message in memory for getMessage lookup fix (prevents decryption/waiting errors)
       if (mek.key && mek.key.id && mek.message) {
