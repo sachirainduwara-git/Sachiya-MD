@@ -379,7 +379,6 @@ async function connectToWA() {
 
   sachiya.ev.on('messages.upsert', async (chatUpdate) => {
     try {
-      // ⚡ මෙතන චැට් අප්ඩේට් එකේ type එක notification එකක් හෝ history එකක් වුණොත් මැසේජ් හැング වෙන්න පුළුවන් නිසා 'notify' ටයිප් එකට හෝ ඇතුළට එන මැසේජ් වලට පමණක් වැඩ කරන විදිහට බලමු
       if (chatUpdate.type !== 'notify') return;
 
       const mek = chatUpdate.messages ? chatUpdate.messages[0] : chatUpdate[0];
@@ -526,8 +525,9 @@ async function connectToWA() {
       const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
       if (isRevoke) {
         try {
-          const deleteDoc = await AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' });
-          if (deleteDoc && deleteDoc.enabled === true) {
+          const deleteDoc = `AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' })`; // safe reference
+          const delCheck = await AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' });
+          if (delCheck && delCheck.enabled === true) {
             await handleMessageRevocation(sachiya, mek);
           }
         } catch (e) {}
