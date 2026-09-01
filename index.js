@@ -26,6 +26,9 @@ const { handleAutoStatus } = require('./plugins/autostatus');
 
 global.activeSettingsMenus = global.activeSettingsMenus || new Map();
 
+// ⚡ Ultra Fast Bot Start Timestamp to Ignore Old Synced Messages
+const botStartTime = Date.now();
+
 const app = express();
 const port = process.env.PORT || 8000;
 
@@ -51,6 +54,7 @@ const BlockSchema = new mongoose.Schema({
 });
 const BlockModel = mongoose.models.BlockList || mongoose.model('BlockList', BlockSchema);
 
+// Mongoose Models for Instant Live Database Checking
 const AntiCallModel = mongoose.models.AntiCall || mongoose.model('AntiCall', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
 const AntideleteModel = mongoose.models.Antidelete || mongoose.model('Antidelete', new mongoose.Schema({ _id: { type: String, required: true }, enabled: { type: Boolean, default: false } }));
 const AutoReactModel = mongoose.models.AutoReact || mongoose.model('AutoReact', new mongoose.Schema({ _id: { type: String, required: true }, ireact: { type: Boolean, default: true }, greact: { type: Boolean, default: true } }));
@@ -131,6 +135,7 @@ async function loadBlockedListIntoCache() {
   }
 }
 
+// 🛡️ Ultimate Stream & Console Interceptor
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
@@ -227,7 +232,9 @@ async function connectToWA() {
     fs.mkdirSync(authFolder, { recursive: true });
   }
 
-  await Promise.all([loadSessionFromMongo(), loadBlockedListIntoCache()]);
+  // 🛠️ FIXED: Ensure session is fully loaded from MongoDB BEFORE initializing Baileys connection
+  await loadSessionFromMongo();
+  await loadBlockedListIntoCache();
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
@@ -243,13 +250,10 @@ async function connectToWA() {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     syncFullHistory: false,
-    fireInitQueries: true, 
+    fireInitQueries: false, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
     shouldSyncHistoryMessage: () => false,
-    connectTimeoutMs: 60000,
-    defaultQueryTimeoutMs: 0,
-    keepAliveIntervalMs: 10000,
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -311,15 +315,11 @@ async function connectToWA() {
         global.hasLoggedConsoleOnce = true;
         console.log('\n╭─────────────────────────────────────╮');
         console.log('│ SACHIYA MD CONNECTED SUCCESSFULLY!  │');
-        console.log('╰─────────────────────────────────────╯\n');
+        console.log('╰─────────────────────────────────────\n');
       }
 
       await saveSessionToMongo();
       await loadBlockedListIntoCache();
-
-      try {
-        await sachiya.sendPresenceUpdate('available');
-      } catch (e) {}
 
       if (!global.hasSentBootMessage) {
         global.hasSentBootMessage = true;
@@ -357,6 +357,7 @@ async function connectToWA() {
     await saveSessionToMongo();
   });
 
+  // --- AntiCall Live DB Check & Instant Block Event (Fixed for Groups) ---
   sachiya.ev.on('call', async (chats) => {
     try {
       const callDoc = await AntiCallModel.findOne({ _id: 'sachiyamd_anticall_status' });
@@ -379,11 +380,10 @@ async function connectToWA() {
 
   sachiya.ev.on('messages.upsert', async (chatUpdate) => {
     try {
-      if (chatUpdate.type !== 'notify') return;
-
       const mek = chatUpdate.messages ? chatUpdate.messages[0] : chatUpdate[0];
       if (!mek || !mek.message) return;
 
+      // Store message in memory for getMessage lookup fix
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
         if (messageInMemoryStore.size > 500) {
@@ -392,6 +392,7 @@ async function connectToWA() {
         }
       }
 
+      // --- Handle Settings Menu Multi-Replies ---
       const quotedMsg = mek.message.extendedTextMessage?.contextInfo;
       const stanzaId = quotedMsg?.stanzaId;
       
@@ -460,6 +461,7 @@ async function connectToWA() {
         }
       }
 
+      // --- Handle Status Broadcasts (Instant DB Check) ---
       if (mek.key && mek.key.remoteJid === 'status@broadcast') {
         try {
           const statusDoc = await AutoStatusModel.findOne({ _id: 'sachiyamd_autostatus_settings' });
@@ -472,6 +474,7 @@ async function connectToWA() {
         return;
       }
 
+      // --- AutoRead and AutoReact Execution (Instant DB Check) ---
       try {
         if (!mek.key.fromMe) {
           const reactDoc = await AutoReactModel.findOne({ _id: 'sachiyamd_autoreact_settings' }) || await AutoReactModel.create({ _id: 'sachiyamd_autoreact_settings', ireact: true, greact: true });
@@ -522,12 +525,12 @@ async function connectToWA() {
           if (!isAllowedCmd) return; 
       }
 
+      // --- Anti-Delete Message Handling (Instant DB Check) ---
       const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
       if (isRevoke) {
         try {
-          const deleteDoc = `AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' })`; // safe reference
-          const delCheck = await AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' });
-          if (delCheck && delCheck.enabled === true) {
+          const deleteDoc = await AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' });
+          if (deleteDoc && deleteDoc.enabled === true) {
             await handleMessageRevocation(sachiya, mek);
           }
         } catch (e) {}
@@ -553,27 +556,25 @@ async function connectToWA() {
       const botNumber = botJid ? botJid.split('@')[0] : '';
       
       const isGroup = from.endsWith('@g.us');
-      const rawSender = isGroup ? (mek.key.participant || mek.participant) : (mek.key.fromMe ? botNumber : from);
+      const rawSender = isGroup ? (mek.key.participant || mek.participant) : from;
       const sender = jidNormalizedUser(rawSender || from);
       const senderNumber = sender ? sender.split('@')[0] : '';
 
       const isMe = botNumber && senderNumber ? botNumber.includes(senderNumber) : false;
-      const isOwner = ownerNumber.includes(senderNumber) || isMe || mek.key.fromMe;
+      const isOwner = ownerNumber.includes(senderNumber) || isMe;
 
-      if (workMode === "private" && !isOwner && !mek.key.fromMe) return;
+      if (workMode === "private" && !isOwner) return;
 
       const reply = (text) => sachiya.sendMessage(from, { text }, { quoted: mek });
 
       const cmd = commands.find((c) => c.pattern === commandName || (c.alias && c.alias.includes(commandName)));
-      if (cmd) {
-        if (cmd.react) await sachiya.sendMessage(from, { react: { text: cmd.react, key: mek.key } }).catch(() => {});
-        try {
-          await cmd.function(sachiya, mek, m, {
-            from, quoted, body, isCmd, command: commandName, args, q, reply, isGroup, sender, senderNumber, isOwner
-          });
-        } catch (e) {
-          console.error("[PLUGIN ERROR]", e);
-        }
+      if (cmd.react) await sachiya.sendMessage(from, { react: { text: cmd.react, key: mek.key } }).catch(() => {});
+      try {
+        await cmd.function(sachiya, mek, m, {
+          from, quoted, body, isCmd, command: commandName, args, q, reply, isGroup, sender, senderNumber, isOwner
+        });
+      } catch (e) {
+        console.error("[PLUGIN ERROR]", e);
       }
     } catch (err) {
       if (!handleSilentErrors(err)) {
