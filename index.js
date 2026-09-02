@@ -229,12 +229,12 @@ async function connectToWA() {
     fs.mkdirSync(authFolder, { recursive: true });
   }
 
-  await loadSessionFromMongo();
-  await loadBlockedListIntoCache();
+  await Promise.all([loadSessionFromMongo(), loadBlockedListIntoCache()]);
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
+  // 🛠️ FIXED SOCKET OPTIONS & ROBUST MESSAGE STORE FOR SMOOTH DECRYPTION & REACTS
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -253,10 +253,9 @@ async function connectToWA() {
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
-        const msg = messageInMemoryStore.get(msgId);
-        if (msg) return msg;
+        return messageInMemoryStore.get(msgId);
       }
-      return { conversation: "SACHIYA-MD Audio/Media Container" };
+      return { conversation: "Hello, I am SACHIYA-MD!" };
     }
   });
 
@@ -379,11 +378,11 @@ async function connectToWA() {
     try {
       const mek = chatUpdate.messages ? chatUpdate.messages[0] : chatUpdate[0];
       if (!mek || !mek.message) return;
-
-      // Store message in memory for getMessage lookup fix
+      
+      // Store message in memory for getMessage lookup fix (prevents decryption/waiting errors)
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
-        if (messageInMemoryStore.size > 1000) {
+        if (messageInMemoryStore.size > 500) {
           const firstKey = messageInMemoryStore.keys().next().value;
           messageInMemoryStore.delete(firstKey);
         }
