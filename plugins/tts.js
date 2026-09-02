@@ -10,12 +10,12 @@ cmd({
 },
 async (conn, mek, m, { from, q, reply }) => {
     try {
-        if (!q) return reply("⚠️ කරුණාකර හඬ බවට හැරවිය යුතු වචන කිහිපයක් ලබා දෙන්න!\nඋදා: `.tts sinhala hello` හෝ `.tts si Ayubowan`");
+        if (!q) return reply("⚠️ කරුණාකර හඬ බවට හැරවිය යුතු වචන කිහිපයක් ලබා දෙන්න!\nඋදා: `.tts sinhala hello` හෝ `.tts ayubowan`");
         
         let lang = "si"; // Default Sinhala
         let text = q;
 
-        if (q.length > 200) {
+        if (text.length > 200) {
             return reply("❌ වචන 200 කට වඩා වැඩි ප්‍රමාණයක් එකවර ලබා දිය නොහැක!");
         }
 
@@ -25,9 +25,14 @@ async (conn, mek, m, { from, q, reply }) => {
             host: 'https://translate.google.com',
         });
 
+        // Fetch audio buffer directly to prevent WhatsApp download errors
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Failed to fetch audio from Google TTS");
+        const buffer = Buffer.from(await response.arrayBuffer());
+
         await conn.sendMessage(from, {
-            audio: { url: url },
-            mimetype: 'audio/mpeg',
+            audio: buffer,
+            mimetype: 'audio/mp4',
             ptt: true
         }, { quoted: mek });
 
