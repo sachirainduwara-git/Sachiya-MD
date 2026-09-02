@@ -10,7 +10,7 @@ cmd({
 },
 async (conn, mek, m, { from, q, reply }) => {
     try {
-        if (!q) return reply("⚠️ කරුණාකර හඬ බවට හැරවිය යුතු වචන කිහිපයක් ලබා දෙන්න!\nඋදා: `.tts sinhala hello` හෝ `.tts ayubowan`");
+        if (!q) return reply("⚠️ කරුණාකර හඬ බවට හැරවිය යුතු වචන කිහිපයක් ලබා දෙන්න!\nඋදා: `.tts hello` හෝ `.tts ayubowan`");
         
         let lang = "si"; // Default Sinhala
         let text = q;
@@ -25,14 +25,14 @@ async (conn, mek, m, { from, q, reply }) => {
             host: 'https://translate.google.com',
         });
 
-        // Fetch audio buffer directly to prevent WhatsApp download errors
         const response = await fetch(url);
         if (!response.ok) throw new Error("Failed to fetch audio from Google TTS");
         const buffer = Buffer.from(await response.arrayBuffer());
 
+        // Send with ogg/opus mimetype which is 100% compatible with WhatsApp Voice Notes
         await conn.sendMessage(from, {
             audio: buffer,
-            mimetype: 'audio/mp4',
+            mimetype: 'audio/ogg; codecs=opus',
             ptt: true
         }, { quoted: mek });
 
