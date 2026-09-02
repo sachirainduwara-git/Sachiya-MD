@@ -234,7 +234,6 @@ async function connectToWA() {
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
-  // 🛠️ FIXED SOCKET OPTIONS & ROBUST MESSAGE STORE FOR SMOOTH DECRYPTION & REACTS
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -246,10 +245,9 @@ async function connectToWA() {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     syncFullHistory: false,
-    fireInitQueries: false, 
+    fireInitQueries: true, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
-    shouldSyncHistoryMessage: () => false,
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -376,10 +374,10 @@ async function connectToWA() {
 
   sachiya.ev.on('messages.upsert', async (chatUpdate) => {
     try {
-      const mek = chatUpdate.messages ? chatUpdate.messages[0] : chatUpdate[0];
+      if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
+      const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
-      // Store message in memory for getMessage lookup fix (prevents decryption/waiting errors)
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
         if (messageInMemoryStore.size > 500) {
@@ -557,7 +555,7 @@ async function connectToWA() {
       const sender = jidNormalizedUser(rawSender || from);
       const senderNumber = sender ? sender.split('@')[0] : '';
 
-      const isMe = botNumber && senderNumber ? botNumber.includes(senderNumber) : false;
+      const isMe = botNumber && senderNumber ? botNumber.includes(senderNumber) : (mek.key.fromMe || false);
       const isOwner = ownerNumber.includes(senderNumber) || isMe;
 
       if (workMode === "private" && !isOwner) return;
