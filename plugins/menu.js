@@ -14,7 +14,7 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
     try {
         const prefix = config.PREFIX || '.';
         
-        // 👤 Fix for User Name (যাতে undefined නොවී නම හරියට වැටේ)
+        // 👤 Fix for User Name ( undefined නොවී නම හරියට වැටේ)
         const userName = pushname || m.pushName || mek.pushName || 'User';
         
         // 💾 RAM Usage Calculations
@@ -57,13 +57,13 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
             menuMsg += `╰───────────────────\n\n`;
         });
 
-        menuMsg += `> *Powered by SACHIYA-MINI-BOT 🧬*`;
+        menuMsg += `> *Powered by SACHIYA-MINI-BOT* 💫`;
 
         // 🖼️ Send Image + Categorized Menu Message
         await sachiya.sendMessage(
             from,
             {
-                image: { url: config.ALIVE_IMG || "https://github.com/sachirainduwara/Bot/blob/main/images/SACHIYA%20MD.png?raw=true" },
+                image: { url: config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg" },
                 caption: menuMsg
             },
             { quoted: mek }
