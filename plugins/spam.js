@@ -1,8 +1,8 @@
 const { commands } = require('../command');
 
 commands.push({
-    pattern: 'spam',
-    alias: ['spammsg'],
+    pattern: 'boom',
+    alias: ['boom'],
     desc: 'Spam a message a specific number of times without limits',
     category: 'owner',
     react: '🚀',
