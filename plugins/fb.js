@@ -53,7 +53,7 @@ cmd(
       // Extracting clean details
       const { title, sd, hd, thumbnail } = result;
       const videoTitle = title && title.trim() !== "" ? title : "Facebook Downloaded Video";
-      const videoThumb = thumbnail || config.ALIVE_IMG || "https://github.com/sachirainduwara/Bot/blob/main/images/SACHIYA%20MD.png?raw=true";
+      const videoThumb = thumbnail || config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg";
 
       const menuCaption = `╭━━━〔 *📥 FACEBOOK DOWNLOADER* 〕━━━\n` +
                           `┃\n` +
