@@ -88,7 +88,7 @@ cmd(
         from,
         {
           image: {
-            url: config.ALIVE_IMG || "https://github.com/sachirainduwara/Bot/blob/main/images/SACHIYA%20MD.png?raw=true",
+            url: config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg",
           },
           caption: captionMsg,
         },
