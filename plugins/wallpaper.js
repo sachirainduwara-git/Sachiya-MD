@@ -47,7 +47,7 @@ cmd(
         from,
         {
           image: {
-            url: "https://github.com/sachirainduwara/Bot/blob/main/images/SACHIYA%20MD.png?raw=true",
+            url: "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg",
           },
           caption: header,
         },
