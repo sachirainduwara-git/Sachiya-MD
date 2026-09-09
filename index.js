@@ -234,6 +234,7 @@ async function connectToWA() {
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
+  // 🚀 Ultra Optimized Message Store Map for Fixed Decryption & Speed
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -248,12 +249,14 @@ async function connectToWA() {
     fireInitQueries: true, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
+    // 🛠️ 100% Fixed "Waiting for this message" Bug by properly returning actual message payload
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
-        return messageInMemoryStore.get(msgId);
+        const cachedMsg = messageInMemoryStore.get(msgId);
+        if (cachedMsg) return cachedMsg;
       }
-      return { conversation: "Hello, I am SACHIYA-MD!" };
+      return undefined;
     }
   });
 
@@ -309,7 +312,7 @@ async function connectToWA() {
         global.hasLoggedConsoleOnce = true;
         console.log('\n╭─────────────────────────────────────╮');
         console.log('│ SACHIYA MD CONNECTED SUCCESSFULLY!  │');
-        console.log('╰─────────────────────────────────────\n');
+        console.log('╰─────────────────────────────────────⁠╯⁠\n');
       }
 
       await saveSessionToMongo();
@@ -378,9 +381,10 @@ async function connectToWA() {
       const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
+      // 🚀 Ultra Speed Message Caching for Decryption & Anti-Bug
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
-        if (messageInMemoryStore.size > 500) {
+        if (messageInMemoryStore.size > 1000) {
           const firstKey = messageInMemoryStore.keys().next().value;
           messageInMemoryStore.delete(firstKey);
         }
