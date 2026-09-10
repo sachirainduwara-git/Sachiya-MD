@@ -48,7 +48,7 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
         // 1. Voice Note (Audio) එක Raw Link එක හරහා යැවීම
         await sachiya.sendMessage(from, {
             audio: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/Bailalentho.mp3' },
-            mimetype: 'audio/ogg; codecs=opus',
+            mimetype: 'audio/mpeg',
             ptt: true
         }, { quoted: mek });
 
