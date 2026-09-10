@@ -49,7 +49,7 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
         await sachiya.sendMessage(from, {
             audio: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Bailalentho.opus' },
             mimetype: 'audio/ogg; codecs=opus',
-            ptt: false
+            ptt: true
         }, { quoted: mek });
 
         // 2. Image එක සමඟ Alive Message එක යැවීම
