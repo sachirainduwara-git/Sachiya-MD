@@ -47,16 +47,14 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 
         // 1. Voice Note (Audio) එක Raw Link එක හරහා යැවීම
         await sachiya.sendMessage(from, {
-            audio: { url: 'https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/Bailalentho.mp3
-' },
+            audio: { url: 'https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/Bailalentho.mp3' },
             mimetype: 'audio/mpeg',
             ptt: true
         }, { quoted: mek });
 
         // 2. Image එක සමඟ Alive Message එක යැවීම
         await sachiya.sendMessage(from, {
-            image: { url: 'https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png
-' },
+            image: { url: 'https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png' },
             caption: aliveMsg
         }, { quoted: mek });
 
