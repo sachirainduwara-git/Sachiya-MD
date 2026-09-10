@@ -45,12 +45,28 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        // 1. Voice Note (Audio) එක Raw Link එක හරහා යැවීම
-        await sachiya.sendMessage(from, {
-            audio: { url: './media/Bailalentho.mp3' },
-            mimetype: 'audio/mp4',
-            ptt: true
-        }, { quoted: mek });
+        import axios from 'axios';
+
+// 1. URL එකෙන් ඔඩියෝ එක ඩ්‍රෙකිම් බෆර් එකක් විදිහට ලබාගැනීම
+let audioBuffer;
+try {
+    const response = await axios.get('https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/Bailalentho.mp3', {
+        responseType: 'arraybuffer'
+    });
+    audioBuffer = Buffer.from(response.data);
+} catch (e) {
+    console.log("Audio download error:", e);
+}
+
+// 2. බෆර් එක Baileys හරහා වොයිස් නෝට් එකක් ලෙස යැවීම
+if (audioBuffer) {
+    await sachiya.sendMessage(from, { 
+        audio: audioBuffer, 
+        mimetype: 'audio/mp4', 
+        ptt: true 
+    }, { quoted: mek });
+}
+
 
         // 2. Image එක සමඟ Alive Message එක යැවීම
         await sachiya.sendMessage(from, {
