@@ -45,8 +45,7 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        import axios from 'axios';
-
+        
 // 1. URL එකෙන් ඔඩියෝ එක ඩ්‍රෙකිම් බෆර් එකක් විදිහට ලබාගැනීම
 let audioBuffer;
 try {
