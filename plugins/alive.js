@@ -13,10 +13,8 @@ cmd({
 },
 async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
     try {
-        // Fix for User Name
         const userName = pushname || m.pushName || mek.pushName || 'User';
 
-        // System Information
         const totalRam = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
         const freeRam = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
         const usedRam = (totalRam - freeRam).toFixed(2);
@@ -57,12 +55,23 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
             console.log("Audio download error:", err);
         }
 
-        // 2. Voice Note (Audio) එක Buffer එක හරහා යැවීම
+        // 2. සාමාන්‍ය Audio එකක් ලෙස (Player එකක් විදිහට) යැවීම
         if (audioBuffer) {
             await sachiya.sendMessage(from, {
                 audio: audioBuffer,
-                mimetype: 'audio/mp4',
-                ptt: true
+                mimetype: 'audio/mpeg',
+                fileName: 'Sachiya-MD Alive.mp3',
+                // පින්තූරයේ වගේ මියුසික් ලාංඡනය සමඟ ලස්සනට පෙන්වීමට 
+                contextInfo: { 
+                    externalAdReply: {
+                        title: "SACHIYA-MD ALIVE AUDIO",
+                        body: "Playing system audio...",
+                        thumbnailUrl: "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
+                        sourceUrl: "",
+                        mediaType: 1,
+                        renderLargerThumbnail: true
+                    }
+                }
             }, { quoted: mek });
         }
 
