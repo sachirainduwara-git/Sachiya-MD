@@ -92,7 +92,7 @@ cmd(
       await sachiya.sendMessage(
         from,
         {
-          image: { url: "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg" },
+          image: { url: "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true" },
           caption: desc,
         },
         { quoted: mek }
