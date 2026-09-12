@@ -2,6 +2,9 @@ const { cmd, commands } = require('../command');
 const config = require('../config');
 const { runtime } = require('../lib/functions');
 const os = require('os');
+const fs = require('fs');
+const axios = require('axios');
+const path = require('path');
 
 cmd({
     pattern: "alive",
@@ -45,12 +48,20 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        // 1. Voice Note (Audio) එක Raw Link එක හරහා යැවීම
-        await sachiya.sendMessage(from, {
-            audio: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/Bailalentho.mp3' },
-            mimetype: 'audio/mpeg',
-            ptt: true
-        }, { quoted: mek });
+        // 1. Voice Note (Audio) එක බෆර් එකක් විදිහට ඩවුන්‌ලෝඩ් කරලා PTT එකක් ලෙස යැවීම (Error එන්නේ නැත)
+        try {
+            const audioUrl = 'https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/Bailalentho.mp3';
+            const response = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+            const audioBuffer = Buffer.from(response.data);
+
+            await sachiya.sendMessage(from, {
+                audio: audioBuffer,
+                mimetype: 'audio/mp4',
+                ptt: true
+            }, { quoted: mek });
+        } catch (audioErr) {
+            console.log("Audio Send Error:", audioErr.message);
+        }
 
         // 2. Image එක සමඟ Alive Message එක යැවීම
         await sachiya.sendMessage(from, {
