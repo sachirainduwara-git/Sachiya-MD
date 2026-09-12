@@ -1,9 +1,7 @@
-const { cmd } = require('../command');
+const { cmd, commands } = require('../command');
 const config = require('../config');
 const { runtime } = require('../lib/functions');
 const os = require('os');
-const fs = require('fs');
-const path = require('path');
 
 cmd({
     pattern: "alive",
@@ -14,8 +12,10 @@ cmd({
 },
 async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
     try {
+        // Fix for User Name
         const userName = pushname || m.pushName || mek.pushName || 'User';
 
+        // System Information
         const totalRam = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
         const freeRam = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
         const usedRam = (totalRam - freeRam).toFixed(2);
@@ -45,30 +45,18 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        // ── 1. Local Audio (Voice Note) යැවීම (ලින්ක් නැත, සම්පූර්ණයෙන්ම ලෝකල් ෆයිල් එකකින්) ──
-        const audioPath = path.join(__dirname, '../media/Bailalentho.mp3');
-        if (fs.existsSync(audioPath)) {
-            const ext = audioPath.split('.').pop().toLowerCase();
-            const audioMime = ext === 'mp3' ? 'audio/mpeg' : 'audio/ogg; codecs=opus';
-            
-            await sachiya.sendMessage(from, {
-                audio: fs.readFileSync(audioPath),
-                mimetype: audioMime,
-                ptt: true
-            }, { quoted: mek }).catch(() => {});
-        }
+        // 1. Voice Note (Audio) එක Raw Link එක හරහා යැවීම
+        await sachiya.sendMessage(from, {
+            audio: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/Bailalentho.mp3' },
+            mimetype: 'audio/mpeg',
+            ptt: true
+        }, { quoted: mek });
 
-        // ── 2. Local Image එක සමඟ Alive Message එක යැවීම ──
-        const imagePath = path.join(__dirname, '../media/IMG_0160.png');
-        if (fs.existsSync(imagePath)) {
-            await sachiya.sendMessage(from, {
-                image: fs.readFileSync(imagePath),
-                caption: aliveMsg
-            }, { quoted: mek });
-        } else {
-            // ෆයිල් එක නැත්නම් විකල්පව ටෙක්ස්ට් එක යවන්න
-            await sachiya.sendMessage(from, { text: aliveMsg }, { quoted: mek });
-        }
+        // 2. Image එක සමඟ Alive Message එක යැවීම
+        await sachiya.sendMessage(from, {
+            image: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true' },
+            caption: aliveMsg
+        }, { quoted: mek });
 
     } catch (e) {
         console.log(e);
