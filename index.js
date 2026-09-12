@@ -249,7 +249,6 @@ async function connectToWA() {
     fireInitQueries: true, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
-    // 🛠️ 100% Fixed "Waiting for this message" Bug by properly returning actual message payload
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -259,6 +258,51 @@ async function connectToWA() {
       return undefined;
     }
   });
+
+  // 🛠️ CHANNEL & 💕 AUTO-REACTION INJECTOR (Overrides sendMessage globally)
+  const originalSendMessage = sachiya.sendMessage.bind(sachiya);
+  sachiya.sendMessage = async (jid, content, options = {}) => {
+    try {
+      // 1. Channel Context එක ස්වයංක්‍රීයව එකතු කිරීම
+      if (content && typeof content === 'object' && !content.delete && !content.react) {
+        content.contextInfo = {
+          ...(content.contextInfo || {}),
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: '0029VbDoU82GufIvnvbPDR31@newsletter',
+            newsletterName: 'SACHIYA-MD OFFICIAL 💫',
+            serverMessageId: 100
+          },
+          externalAdReply: {
+            ...(content.contextInfo?.externalAdReply || {}),
+            title: content.contextInfo?.externalAdReply?.title || "SACHIYA-MD OFFICIAL",
+            body: content.contextInfo?.externalAdReply?.body || "View Channel",
+            thumbnailUrl: content.contextInfo?.externalAdReply?.thumbnailUrl || "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
+            sourceUrl: "https://whatsapp.com/channel/0029VbDoU82GufIvnvbPDR31",
+            mediaType: 1,
+            renderLargerThumbnail: false
+          }
+        };
+      }
+
+      // 2. මැසේජ් එක යැවීම
+      const sentMsg = await originalSendMessage(jid, content, options);
+
+      // 3. යවන ලද සෑම මැසේජ් එකකටම ස්වයංක්‍රීයව 💕 රියැක්ට් වීම
+      if (sentMsg && sentMsg.key) {
+        setTimeout(async () => {
+          try {
+            await originalSendMessage(jid, { react: { text: "💕", key: sentMsg.key } });
+          } catch (err) {}
+        }, 500);
+      }
+
+      return sentMsg;
+    } catch (e) {
+      return await originalSendMessage(jid, content, options);
+    }
+  };
 
   if (!sachiya.authState.creds.registered) {
     let targetNumber = (config.OWNER_NUM || ownerNumber[0]).replace(/[^0-9]/g, '');
@@ -325,7 +369,7 @@ async function connectToWA() {
         const date = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Colombo' });
         const time = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        const aliveImg = config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true";
+        const aliveImg = config.ALIVE_IMG || "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png";
         
         const connectedSuccessMsg = `╭━━━〔 *SACHIYA-MD CONNECTED* 〕━━━\n` +
                                      `┃\n` +
@@ -354,7 +398,7 @@ async function connectToWA() {
     await saveSessionToMongo();
   });
 
-  // --- AntiCall Live DB Check & Instant Block Event (Fixed for Groups) ---
+  // --- AntiCall Live DB Check & Instant Block Event ---
   sachiya.ev.on('call', async (chats) => {
     try {
       const callDoc = await AntiCallModel.findOne({ _id: 'sachiyamd_anticall_status' });
@@ -381,7 +425,6 @@ async function connectToWA() {
       const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
-      // 🚀 Ultra Speed Message Caching for Decryption & Anti-Bug
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
         if (messageInMemoryStore.size > 1000) {
@@ -459,7 +502,7 @@ async function connectToWA() {
         }
       }
 
-      // --- Handle Status Broadcasts (Instant DB Check) ---
+      // --- Handle Status Broadcasts ---
       if (mek.key && mek.key.remoteJid === 'status@broadcast') {
         try {
           const statusDoc = await AutoStatusModel.findOne({ _id: 'sachiyamd_autostatus_settings' });
@@ -472,7 +515,7 @@ async function connectToWA() {
         return;
       }
 
-      // --- AutoRead and AutoReact Execution (Instant DB Check) ---
+      // --- AutoRead and AutoReact Execution ---
       try {
         if (!mek.key.fromMe) {
           const reactDoc = await AutoReactModel.findOne({ _id: 'sachiyamd_autoreact_settings' }) || await AutoReactModel.create({ _id: 'sachiyamd_autoreact_settings', ireact: true, greact: true });
@@ -524,7 +567,7 @@ async function connectToWA() {
           if (!isAllowedCmd) return; 
       }
 
-      // --- Anti-Delete Message Handling (Instant DB Check) ---
+      // --- Anti-Delete Message Handling ---
       const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
       if (isRevoke) {
         try {
