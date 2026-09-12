@@ -1,6 +1,6 @@
 const { cmd, commands } = require('../command');
 const config = require('../config');
-const { runtime } = require('../lib/functions');
+const { runtime, toAudio } = require('../lib/functions'); // toAudio මෙතැනට ඉම්පෝට් කරගන්න
 const os = require('os');
 const axios = require('axios');
 
@@ -13,10 +13,8 @@ cmd({
 },
 async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
     try {
-        // Fix for User Name
         const userName = pushname || m.pushName || mek.pushName || 'User';
 
-        // System Information
         const totalRam = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
         const freeRam = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
         const usedRam = (totalRam - freeRam).toFixed(2);
@@ -46,15 +44,16 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        // 1. Audio එක axios හරහා බෆර් එකක් ලෙස ලබාගැනීම
+        // 1. Audio එක axios හරහා ගෙන FFmpeg හරහා නිවැරදිව Convert කරගැනීම
         let audioBuffer;
         try {
             const response = await axios.get('https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/Bailalentho.mp3', {
                 responseType: 'arraybuffer'
             });
-            audioBuffer = Buffer.from(response.data);
+            // Converter එක හරහා ඔඩියෝ ෆෝමැට් එක නිවැරදි කිරීම
+            audioBuffer = await toAudio(Buffer.from(response.data), 'mp3');
         } catch (err) {
-            console.log("Audio download error:", err);
+            console.log("Audio convert error:", err);
         }
 
         // 2. ප්‍රථමයෙන් ඉමේජ් එක සමඟ කැප්ෂන් එක යැවීම
@@ -63,7 +62,7 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
             caption: aliveMsg
         }, { quoted: mek });
 
-        // 3. ඊට පසුව ඩවුන්ලෝඩ් හිරවීම් නැතුව Audio එක (Music Player ලෙස) යැවීම
+        // 3. කන්වර්ට් වුණු නිවැරදි Audio Buffer එක යැවීම
         if (audioBuffer) {
             await sachiya.sendMessage(from, {
                 audio: audioBuffer,
