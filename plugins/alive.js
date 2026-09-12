@@ -2,6 +2,7 @@ const { cmd, commands } = require('../command');
 const config = require('../config');
 const { runtime } = require('../lib/functions');
 const os = require('os');
+const axios = require('axios');
 
 cmd({
     pattern: "alive",
@@ -45,28 +46,31 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        // 1. Audio එක Music Player එකක් ලෙස යැවීම (Direct URL)
-        await sachiya.sendMessage(from, {
-            audio: { url: 'https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/Bailalentho.mp3' },
-            mimetype: 'audio/mpeg',
-            fileName: 'Sachiya-MD Alive.mp3',
-            contextInfo: { 
-                externalAdReply: {
-                    title: "SACHIYA-MD ALIVE AUDIO",
-                    body: "Playing system audio...",
-                    thumbnailUrl: "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
-                    sourceUrl: "",
-                    mediaType: 1,
-                    renderLargerThumbnail: true
-                }
-            }
-        }, { quoted: mek });
+        // 1. Audio එක axios හරහා බෆර් එකක් ලෙස ලබාගැනීම
+        let audioBuffer;
+        try {
+            const response = await axios.get('https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/Bailalentho.mp3', {
+                responseType: 'arraybuffer'
+            });
+            audioBuffer = Buffer.from(response.data);
+        } catch (err) {
+            console.log("Audio download error:", err);
+        }
 
-        // 2. Image එක සමඟ Alive Message එක යැවීම
+        // 2. ප්‍රථමයෙන් ඉමේජ් එක සමඟ කැප්ෂන් එක යැවීම
         await sachiya.sendMessage(from, {
             image: { url: 'https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png' },
             caption: aliveMsg
         }, { quoted: mek });
+
+        // 3. ඊට පසුව ඩවුන්ලෝඩ් හිරවීම් නැතුව Audio එක (Music Player ලෙස) යැවීම
+        if (audioBuffer) {
+            await sachiya.sendMessage(from, {
+                audio: audioBuffer,
+                mimetype: 'audio/mpeg',
+                fileName: 'Sachiya-MD Alive.mp3'
+            }, { quoted: mek });
+        }
 
     } catch (e) {
         console.log(e);
