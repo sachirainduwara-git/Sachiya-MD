@@ -258,57 +258,6 @@ async function connectToWA() {
     }
   });
 
-  // 🛠️ PERFECT & CLEAN CHANNEL INJECTOR (කොහෙත්ම කමාන්ඩ් හෝ ස්ටාර්ට් මැසේජ් බ්ලොක් නොවන ක්‍රමය)
-  const originalSendMessage = sachiya.sendMessage.bind(sachiya);
-  sachiya.sendMessage = async (jid, content, options = {}) => {
-    try {
-      // 1. React හෝ Delete වගේ කටයුතු නම් කෙලින්ම යැවීම
-      if (!content || content.delete || content.react) {
-        return await originalSendMessage(jid, content, options);
-      }
-
-      // 2. මැසේජ් ඔබ්ජෙක්ට් එක සේෆ් විදිහට ක්ලෝන් කරගෙන චැනල් ලින්ක් එක එකතු කිරීම
-      let finalContent = typeof content === 'object' ? { ...content } : { text: content };
-      
-      if (!finalContent.contextInfo) finalContent.contextInfo = {};
-      finalContent.contextInfo.forwardingScore = 999;
-      finalContent.contextInfo.isForwarded = true;
-      finalContent.contextInfo.forwardedNewsletterMessageInfo = {
-        newsletterJid: '0029VbDoU82GufIvnvbPDR31@newsletter',
-        newsletterName: 'SACHIYA-MD OFFICIAL 💫',
-        serverMessageId: 100
-      };
-      
-      if (!finalContent.contextInfo.externalAdReply) {
-        finalContent.contextInfo.externalAdReply = {
-          title: "SACHIYA-MD OFFICIAL",
-          body: "View Channel",
-          thumbnailUrl: "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
-          sourceUrl: "https://whatsapp.com/channel/0029VbDoU82GufIvnvbPDR31",
-          mediaType: 1,
-          renderLargerThumbnail: false
-        };
-      }
-
-      // 3. මැසේජ් එක යැවීම
-      const sentMsg = await originalSendMessage(jid, finalContent, options);
-
-      // 4. යවන ලද මැසේජ් එකට ස්වයංක්‍රීයව 💕 රියැක්ට් වීම (බොට්ගේ කමාන්ඩ් හෝ වෙනත් මැසේජ් වලට බාධා නොවන ලෙස)
-      if (sentMsg && sentMsg.key) {
-        setTimeout(async () => {
-          try {
-            await originalSendMessage(jid, { react: { text: "💕", key: sentMsg.key } });
-          } catch (err) {}
-        }, 300);
-      }
-
-      return sentMsg;
-    } catch (e) {
-      console.error("SendMessage Error:", e);
-      return await originalSendMessage(jid, content, options);
-    }
-  };
-
   if (!sachiya.authState.creds.registered) {
     let targetNumber = (config.OWNER_NUM || ownerNumber[0]).replace(/[^0-9]/g, '');
     
