@@ -51,6 +51,7 @@ const BlockSchema = new mongoose.Schema({
 });
 const BlockModel = mongoose.models.BlockList || mongoose.model('BlockList', BlockSchema);
 
+// Mongoose Models for Instant Live Database Checking
 const AntiCallModel = mongoose.models.AntiCall || mongoose.model('AntiCall', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
 const AntideleteModel = mongoose.models.Antidelete || mongoose.model('Antidelete', new mongoose.Schema({ _id: { type: String, required: true }, enabled: { type: Boolean, default: false } }));
 const AutoReactModel = mongoose.models.AutoReact || mongoose.model('AutoReact', new mongoose.Schema({ _id: { type: String, required: true }, ireact: { type: Boolean, default: true }, greact: { type: Boolean, default: true } }));
@@ -131,6 +132,7 @@ async function loadBlockedListIntoCache() {
   }
 }
 
+// 🛡️ Ultimate Stream & Console Interceptor
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
@@ -232,6 +234,7 @@ async function connectToWA() {
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
+  // 🚀 Ultra Optimized Message Store Map for Fixed Decryption & Speed
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -245,7 +248,8 @@ async function connectToWA() {
     syncFullHistory: false,
     fireInitQueries: true, 
     markOnlineOnConnect: true,
-    generateHighQualityLinkPreview: true,
+    generateHighQualityLinkPreview: false,
+    // 🛠️ 100% Fixed "Waiting for this message" Bug by properly returning actual message payload
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -255,49 +259,6 @@ async function connectToWA() {
       return undefined;
     }
   });
-
-  const originalSendMessage = sachiya.sendMessage.bind(sachiya);
-  sachiya.sendMessage = async (jid, content, options = {}) => {
-    try {
-      if (!content || content.delete || content.react) {
-        return await originalSendMessage(jid, content, options);
-      }
-
-      let finalContent = typeof content === 'object' ? { ...content } : { text: content };
-      
-      if (!finalContent.contextInfo) {
-        finalContent.contextInfo = {};
-      }
-
-      // External link preview (Rich preview) setup
-      if (!finalContent.contextInfo.externalAdReply) {
-        finalContent.contextInfo.externalAdReply = {
-          title: "SACHIYA-MD OFFICIAL",
-          body: "Join WhatsApp Channel",
-          thumbnailUrl: "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
-          sourceUrl: "https://whatsapp.com/channel/0029VbDoU82GufIvnvbPDR31",
-          mediaType: 1,
-          renderLargerThumbnail: false
-        };
-      }
-
-      const sentMsg = await originalSendMessage(jid, finalContent, options);
-
-      // Auto React 💕 to bot's messages
-      if (sentMsg && sentMsg.key) {
-        setTimeout(async () => {
-          try {
-            await originalSendMessage(jid, { react: { text: "💕", key: sentMsg.key } });
-          } catch (err) {}
-        }, 300);
-      }
-
-      return sentMsg;
-    } catch (e) {
-      console.error("SendMessage Error:", e);
-      return await originalSendMessage(jid, content, options);
-    }
-  };
 
   if (!sachiya.authState.creds.registered) {
     let targetNumber = (config.OWNER_NUM || ownerNumber[0]).replace(/[^0-9]/g, '');
@@ -364,7 +325,7 @@ async function connectToWA() {
         const date = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Colombo' });
         const time = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        const aliveImg = config.ALIVE_IMG || "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png";
+        const aliveImg = config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true";
         
         const connectedSuccessMsg = `╭━━━〔 *SACHIYA-MD CONNECTED* 〕━━━\n` +
                                      `┃\n` +
@@ -393,6 +354,7 @@ async function connectToWA() {
     await saveSessionToMongo();
   });
 
+  // --- AntiCall Live DB Check & Instant Block Event (Fixed for Groups) ---
   sachiya.ev.on('call', async (chats) => {
     try {
       const callDoc = await AntiCallModel.findOne({ _id: 'sachiyamd_anticall_status' });
@@ -419,6 +381,7 @@ async function connectToWA() {
       const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
+      // 🚀 Ultra Speed Message Caching for Decryption & Anti-Bug
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
         if (messageInMemoryStore.size > 1000) {
@@ -427,6 +390,7 @@ async function connectToWA() {
         }
       }
 
+      // --- Handle Settings Menu Multi-Replies ---
       const quotedMsg = mek.message.extendedTextMessage?.contextInfo;
       const stanzaId = quotedMsg?.stanzaId;
       
@@ -495,6 +459,7 @@ async function connectToWA() {
         }
       }
 
+      // --- Handle Status Broadcasts (Instant DB Check) ---
       if (mek.key && mek.key.remoteJid === 'status@broadcast') {
         try {
           const statusDoc = await AutoStatusModel.findOne({ _id: 'sachiyamd_autostatus_settings' });
@@ -507,6 +472,7 @@ async function connectToWA() {
         return;
       }
 
+      // --- AutoRead and AutoReact Execution (Instant DB Check) ---
       try {
         if (!mek.key.fromMe) {
           const reactDoc = await AutoReactModel.findOne({ _id: 'sachiyamd_autoreact_settings' }) || await AutoReactModel.create({ _id: 'sachiyamd_autoreact_settings', ireact: true, greact: true });
@@ -558,6 +524,7 @@ async function connectToWA() {
           if (!isAllowedCmd) return; 
       }
 
+      // --- Anti-Delete Message Handling (Instant DB Check) ---
       const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
       if (isRevoke) {
         try {
