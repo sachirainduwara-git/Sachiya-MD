@@ -325,7 +325,7 @@ async function connectToWA() {
         const date = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Colombo' });
         const time = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        const aliveImg = config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg";
+        const aliveImg = config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true";
         
         const connectedSuccessMsg = `╭━━━〔 *SACHIYA-MD CONNECTED* 〕━━━\n` +
                                      `┃\n` +
