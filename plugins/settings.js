@@ -72,7 +72,7 @@ cmd({
                        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
                        ` > *Powered by SACHIYA-MD 💫*`;
 
-        let aliveImage = 'https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/Image.jpg';
+        let aliveImage = 'https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true';
 
         let sentMsg = await conn.sendMessage(from, {
             image: { url: aliveImage },
