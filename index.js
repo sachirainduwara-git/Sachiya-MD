@@ -259,47 +259,53 @@ async function connectToWA() {
     }
   });
 
-  // 🛠️ CHANNEL & 💕 AUTO-REACTION INJECTOR (Overrides sendMessage globally)
+  // 🛠️ SAFE CHANNEL & 💕 AUTO-REACTION INJECTOR
   const originalSendMessage = sachiya.sendMessage.bind(sachiya);
   sachiya.sendMessage = async (jid, content, options = {}) => {
     try {
-      // 1. Channel Context එක ස්වයංක්‍රීයව එකතු කිරීම
-      if (content && typeof content === 'object' && !content.delete && !content.react) {
-        content.contextInfo = {
-          ...(content.contextInfo || {}),
-          forwardingScore: 999,
-          isForwarded: true,
-          forwardedNewsletterMessageInfo: {
-            newsletterJid: '0029VbDoU82GufIvnvbPDR31@newsletter',
-            newsletterName: 'SACHIYA-MD OFFICIAL 💫',
-            serverMessageId: 100
-          },
-          externalAdReply: {
-            ...(content.contextInfo?.externalAdReply || {}),
-            title: content.contextInfo?.externalAdReply?.title || "SACHIYA-MD OFFICIAL",
-            body: content.contextInfo?.externalAdReply?.body || "View Channel",
-            thumbnailUrl: content.contextInfo?.externalAdReply?.thumbnailUrl || "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
+      // 1. React හෝ Delete විධානයන් නම් ඒවා කිසිවක් වෙනස් නොකර කෙලින්ම යැවීම
+      if (!content || content.delete || content.react) {
+        return await originalSendMessage(jid, content, options);
+      }
+
+      // 2. අනෙකුත් සියලුම මැසේජ් සඳහා Channel context එක ආරක්ෂිතව එකතු කිරීම
+      if (typeof content === 'object') {
+        if (!content.contextInfo) content.contextInfo = {};
+        content.contextInfo.forwardingScore = 999;
+        content.contextInfo.isForwarded = true;
+        content.contextInfo.forwardedNewsletterMessageInfo = {
+          newsletterJid: '0029VbDoU82GufIvnvbPDR31@newsletter',
+          newsletterName: 'SACHIYA-MD OFFICIAL 💫',
+          serverMessageId: 100
+        };
+        if (!content.contextInfo.externalAdReply) {
+          content.contextInfo.externalAdReply = {
+            title: "SACHIYA-MD OFFICIAL",
+            body: "View Channel",
+            thumbnailUrl: "https://raw.githubusercontent.com/sachirainduwara-git/Sachiya-MD/main/media/IMG_0160.png",
             sourceUrl: "https://whatsapp.com/channel/0029VbDoU82GufIvnvbPDR31",
             mediaType: 1,
             renderLargerThumbnail: false
-          }
-        };
+          };
+        }
       }
 
-      // 2. මැසේජ් එක යැවීම
+      // 3. මැසේජ් එක යැවීම
       const sentMsg = await originalSendMessage(jid, content, options);
 
-      // 3. යවන ලද සෑම මැසේජ් එකකටම ස්වයංක්‍රීයව 💕 රියැක්ට් වීම
+      // 4. යවන ලද මැසේජ් එකට ස්වයංක්‍රීයව 💕 රියැක්ට් වීම
       if (sentMsg && sentMsg.key) {
         setTimeout(async () => {
           try {
             await originalSendMessage(jid, { react: { text: "💕", key: sentMsg.key } });
           } catch (err) {}
-        }, 500);
+        }, 400);
       }
 
       return sentMsg;
     } catch (e) {
+      console.error("SendMessage Error:", e);
+      // කිසියම් දෝෂයක් ආවොත් ඔරිජිනල් ක්‍රමයට මැසේජ් එක යැවීම සහතික කිරීම
       return await originalSendMessage(jid, content, options);
     }
   };
