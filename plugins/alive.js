@@ -45,14 +45,14 @@ async(sachiya, mek, m, { from, quoted, pushname, reply }) => {
 *────────────────────────*
 *Powered by SACHIYA-MD 💫*`;
 
-        // 1. Voice Note (Audio) එක Raw Link එක හරහා යැවීම
+        // 1. මුලින්ම රවුම් වීඩියෝ එක (Video Note / PTV) හරියටම යැවීම
         await sachiya.sendMessage(from, {
-            audio: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/Bailalentho.mp3' },
-            mimetype: 'audio/mpeg',
-            ptt: true
+            video: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/86bc0efd-5674-4e31-8f95-cc15140fd5ea.mov' },
+            mimetype: 'video/mp4',
+            ptv: true // WhatsApp එකේ රවුම් වීඩියෝ එකක් (Video Note) ලෙස පෙන්වීමට
         }, { quoted: mek });
 
-        // 2. Image එක සමඟ Alive Message එක යැවීම
+        // 2. ඊටපස්සේ Image එක සහ Alive Message එක යැවීම
         await sachiya.sendMessage(from, {
             image: { url: 'https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true' },
             caption: aliveMsg
