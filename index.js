@@ -18,7 +18,6 @@ const config = require('./config');
 const { sms } = require('./lib/msg');
 const { commands } = require('./command');
 
-// --- Plugin imports ---
 const { storeMessage, handleMessageRevocation } = require('./plugins/antidelete');
 const { handleAutoread } = require('./plugins/autoread');
 const { handleAutoReact } = require('./plugins/autoreact');
@@ -28,7 +27,6 @@ global.activeSettingsMenus = global.activeSettingsMenus || new Map();
 
 const app = express();
 const port = process.env.PORT || 8000;
-
 const server = http.createServer(app);
 
 const prefix = config.PREFIX || '.';
@@ -50,7 +48,6 @@ const BlockSchema = new mongoose.Schema({
 });
 const BlockModel = mongoose.models.BlockList || mongoose.model('BlockList', BlockSchema);
 
-// Mongoose Models for Instant Live Database Checking
 const AntiCallModel = mongoose.models.AntiCall || mongoose.model('AntiCall', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
 const AntideleteModel = mongoose.models.Antidelete || mongoose.model('Antidelete', new mongoose.Schema({ _id: { type: String, required: true }, enabled: { type: Boolean, default: false } }));
 const AutoReactModel = mongoose.models.AutoReact || mongoose.model('AutoReact', new mongoose.Schema({ _id: { type: String, required: true }, ireact: { type: Boolean, default: true }, greact: { type: Boolean, default: true } }));
@@ -66,7 +63,7 @@ async function loadAllSessionsFromMongo() {
     const sessionDocs = await SessionModel.find({});
     return sessionDocs;
   } catch (e) {
-    console.error("❌ MongoDB All Sessions Load Error:", e);
+    console.error("❌ MongoDB All Sessions Load Error:", e.message);
     return [];
   }
 }
@@ -91,7 +88,7 @@ async function saveSessionToMongo(authFolder, sessionId) {
       { upsert: true, new: true }
     );
   } catch (e) {
-    console.error("❌ MongoDB Session Save Error:", e);
+    console.error("❌ MongoDB Session Save Error:", e.message);
   }
 }
 
@@ -104,7 +101,7 @@ async function clearMongoSession(sessionId) {
     await SessionModel.deleteOne({ _id: sessionId });
     console.log(`🗑️ MongoDB session (${sessionId}) cleared due to logout.`);
   } catch (e) {
-    console.error("❌ MongoDB Session Clear Error:", e);
+    console.error("❌ MongoDB Session Clear Error:", e.message);
   }
 }
 
@@ -124,70 +121,12 @@ async function loadBlockedListIntoCache() {
   }
 }
 
-// 🛡️ Ultimate Stream & Console Interceptor
-const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-const originalStderrWrite = process.stderr.write.bind(process.stderr);
-
-const hiddenKeywords = [
-  'SessionEntry', 'Closing session', '_chains', 'currentRatchet', 
-  'indexInfo', 'pendingPreKey', 'registrationId', 'ephemeralKeyPair', 
-  'privKey', 'remoteIdentityKey', 'pubKey', 'rootKey', 'chainKey', 
-  'messageKeys', 'chainType', 'closed', 'used', 'created', 'libsignal',
-  'Decrypted message', 'Failed to decrypt', 'Bad MAC', 'prekey bundle',
-  'syncing', 'Syncing', 'finish', 'History', 'history', 'app-state-sync'
-];
-
-process.stdout.write = function (chunk, encoding, callback) {
-  if (typeof chunk === 'string' && hiddenKeywords.some(keyword => chunk.includes(keyword))) {
-    return true;
-  }
-  return originalStdoutWrite(chunk, encoding, callback);
-};
-
-process.stderr.write = function (chunk, encoding, callback) {
-  if (typeof chunk === 'string' && hiddenKeywords.some(keyword => chunk.includes(keyword))) {
-    return true;
-  }
-  return originalStderrWrite(chunk, encoding, callback);
-};
-
-const originalConsoleError = console.error;
-const originalConsoleLog = console.log;
-const originalConsoleWarn = console.warn;
-
-console.error = function (...args) {
-  const logText = args.join(' ');
-  if (hiddenKeywords.some(word => logText.includes(word))) return;
-  originalConsoleError.apply(console, args);
-};
-
-console.log = function (...args) {
-  const logText = args.join(' ');
-  if (hiddenKeywords.some(word => logText.includes(word))) return;
-  originalConsoleLog.apply(console, args);
-};
-
-console.warn = function (...args) {
-  const logText = args.join(' ');
-  if (hiddenKeywords.some(word => logText.includes(word))) return;
-  originalConsoleWarn.apply(console, args);
-};
-
-const handleSilentErrors = (err) => {
-  if (!err) return true;
-  const msg = err.message || err.toString() || "";
-  if (hiddenKeywords.some(word => msg.includes(word))) return true;
-  return false;
-};
-
 process.on('uncaughtException', (err) => {
-  if (handleSilentErrors(err)) return;
-  console.error('🔥 Uncaught Exception:', err);
+  console.error('🔥 Uncaught Exception:', err.message || err);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  if (handleSilentErrors(reason)) return;
-  console.error('🔥 Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  console.error('🔥 Unhandled Rejection:', reason);
 });
 
 function loadPlugins() {
@@ -225,7 +164,7 @@ async function startSingleSession(sessionDoc) {
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-  const logger = P({ level: 'silent' });
+  const logger = P({ level: 'info' }); // Enabled info level to track socket state changes clearly
 
   const messageInMemoryStore = new Map();
 
@@ -244,8 +183,7 @@ async function startSingleSession(sessionDoc) {
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
-        const cachedMsg = messageInMemoryStore.get(msgId);
-        if (cachedMsg) return cachedMsg;
+        return messageInMemoryStore.get(msgId);
       }
       return undefined;
     }
@@ -259,6 +197,7 @@ async function startSingleSession(sessionDoc) {
     if (connection === 'close') {
       isConnectedOnce = false;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
+      console.log(`⚠️ Connection closed for session ${sessionId} with status code: ${statusCode}`);
       
       if (statusCode === DisconnectReason.loggedOut) {
         console.error(`❌ Session (${sessionId}) logged out from WhatsApp! Clearing from MongoDB...`);
@@ -267,79 +206,22 @@ async function startSingleSession(sessionDoc) {
           fs.rmSync(authFolder, { recursive: true, force: true });
         }
       } else {
-        setTimeout(() => startSingleSession(sessionDoc), 3000);
+        setTimeout(() => startSingleSession(sessionDoc), 5000);
       }
     } else if (connection === 'open') {
       if (isConnectedOnce) return;
       isConnectedOnce = true;
 
-      if (!global.hasLoggedConsoleOnce) {
-        global.hasLoggedConsoleOnce = true;
-        console.log('\n╭─────────────────────────────────────╮');
-        console.log('│ SACHIYA MD CONNECTED SUCCESSFULLY!  │');
-        console.log('╰─────────────────────────────────────⁠╯⁠\n');
-      }
-
-      console.log(`✅ Connected Session Device: ${sessionId}`);
+      console.log(`🚀 Session Successfully Connected & Active: ${sessionId}`);
 
       await saveSessionToMongo(authFolder, sessionId);
       await loadBlockedListIntoCache();
-
-      if (!global.hasSentBootMessage) {
-        global.hasSentBootMessage = true;
-
-        const ownerJid = ownerNumber[0] + "@s.whatsapp.net";
-        const date = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Colombo' });
-        const time = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-        const aliveImg = config.ALIVE_IMG || "https://github.com/sachirainduwara-git/Sachiya-MD/blob/main/media/IMG_0160.png?raw=true";
-        
-        const connectedSuccessMsg = `╭━━━〔 *SACHIYA-MD CONNECTED* 〕━━━\n` +
-                                     `┃\n` +
-                                     `┃ 🤖 *Bot Status:* Online & Active ✅\n` +
-                                     `┃ ⚙️ *Prefix:* [ ${prefix} ]\n` +
-                                     `┃ 📅 *Date:* ${date}\n` +
-                                     `┃ ⏰ *Time:* ${time}\n` +
-                                     `┃\n` +
-                                     `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                                     `> *⚡ Powered by SACHIYA-MD 💫*`;
-
-        try {
-          await sachiya.sendMessage(ownerJid, {
-            image: { url: aliveImg },
-            caption: connectedSuccessMsg
-          });
-        } catch (err) {
-          await sachiya.sendMessage(ownerJid, { text: connectedSuccessMsg }).catch(() => {});
-        }
-      }
     }
   });
 
   sachiya.ev.on('creds.update', async () => {
     await saveCreds();
     await saveSessionToMongo(authFolder, sessionId);
-  });
-
-  // --- AntiCall Live DB Check & Instant Block Event ---
-  sachiya.ev.on('call', async (chats) => {
-    try {
-      const callDoc = await AntiCallModel.findOne({ _id: 'sachiyamd_anticall_status' });
-      if (callDoc && callDoc.status === true) {
-        for (const call of chats) {
-          if (call.status === 'offer') {
-            const callerJid = call.from;
-            
-            if (!callerJid || callerJid.endsWith('@g.us') || callerJid.includes('-') || call.isGroup === true || (call.chatId && call.chatId.endsWith('@g.us'))) {
-              continue;
-            }
-
-            await sachiya.rejectCall(call.id, callerJid);
-            await sachiya.sendMessage(callerJid, { text: "⚠️ *Calls are not allowed! Please do not call me, drop a text instead.* 🚫" });
-          }
-        }
-      }
-    } catch (e) {}
   });
 
   sachiya.ev.on('messages.upsert', async (chatUpdate) => {
@@ -356,108 +238,7 @@ async function startSingleSession(sessionDoc) {
         }
       }
 
-      const quotedMsg = mek.message.extendedTextMessage?.contextInfo;
-      const stanzaId = quotedMsg?.stanzaId;
-      
-      if (stanzaId && global.activeSettingsMenus && global.activeSettingsMenus.has(stanzaId)) {
-        const menuData = global.activeSettingsMenus.get(stanzaId);
-        const fromMenu = menuData.from;
-        const responseMessage = mek.message.conversation || mek.message.extendedTextMessage?.text || "";
-        const parts = responseMessage.trim().split(/ +/);
-        const featureNum = parts[0];
-        const action = parts[1] ? parts[1].toLowerCase() : "";
-
-        if (action === 'on' || action === 'off') {
-          const stateBool = (action === 'on');
-          let featureName = "";
-
-          try {
-            switch (featureNum) {
-              case '1': {
-                await AntiCallModel.findOneAndUpdate({ _id: 'sachiyamd_anticall_status' }, { status: stateBool }, { upsert: true, new: true });
-                featureName = "📞 Anti-Call";
-                break;
-              }
-              case '2': {
-                await AntideleteModel.findOneAndUpdate({ _id: 'sachiyamd_antidelete_status' }, { enabled: stateBool }, { upsert: true, new: true });
-                featureName = "🛡️ Anti-Delete";
-                break;
-              }
-              case '3':
-              case '4': {
-                let updateObj = featureNum === '3' ? { ireact: stateBool } : { greact: stateBool };
-                await AutoReactModel.findOneAndUpdate({ _id: 'sachiyamd_autoreact_settings' }, updateObj, { upsert: true, new: true });
-                featureName = featureNum === '3' ? "💬 Inbox Auto-React" : "👥 Group Auto-React";
-                break;
-              }
-              case '5': {
-                await AutoReadModel.findOneAndUpdate({ _id: 'autoread_config' }, { enabled: stateBool, updatedAt: new Date() }, { upsert: true, new: true });
-                featureName = "👁️‍🗨️ Auto-Read";
-                break;
-              }
-              case '6': {
-                await AutoStatusModel.findOneAndUpdate({ _id: 'sachiyamd_autostatus_settings' }, { status: stateBool }, { upsert: true, new: true });
-                featureName = "💚 Auto-Status";
-                break;
-              }
-            }
-          } catch (dbErr) {
-            console.error("Settings DB Update Error:", dbErr.message);
-          }
-
-          if (featureName) {
-            const statusEmoji = stateBool ? "🟢 ENABLED" : "🔴 DISABLED";
-            await sachiya.sendMessage(fromMenu, {
-              text: `╭━━━〔 *✨ SETTINGS UPDATED ✨* 〕━━━\n` +
-                    `┃\n` +
-                    `┃ 📌 *Feature:* ${featureName}\n` +
-                    `┃ ⚡ *New Status:* ${statusEmoji}\n` +
-                    `┃ 💾 *Database:* Saved Instantly (Live ✅)\n` +
-                    `┃\n` +
-                    `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                    `> *⚡ Powered by SACHIYA-MD 💫*`
-            }, { quoted: mek });
-
-            await sachiya.sendMessage(fromMenu, { react: { text: stateBool ? "✅" : "❌", key: mek.key } }).catch(() => {});
-            return;
-          }
-        }
-      }
-
-      if (mek.key && mek.key.remoteJid === 'status@broadcast') {
-        try {
-          const statusDoc = await AutoStatusModel.findOne({ _id: 'sachiyamd_autostatus_settings' });
-          if (statusDoc && statusDoc.status === true) {
-            if (typeof handleAutoStatus === 'function') {
-              await handleAutoStatus(sachiya, mek);
-            }
-          }
-        } catch (e) {}
-        return;
-      }
-
-      try {
-        if (!mek.key.fromMe) {
-          const reactDoc = await AutoReactModel.findOne({ _id: 'sachiyamd_autoreact_settings' }) || await AutoReactModel.create({ _id: 'sachiyamd_autoreact_settings', ireact: true, greact: true });
-          const readDoc = await AutoReadModel.findOne({ _id: 'autoread_config' });
-
-          const isGroup = mek.key.remoteJid && mek.key.remoteJid.endsWith('@g.us');
-          const canInboxReact = reactDoc.ireact !== undefined ? reactDoc.ireact : true;
-          const canGroupReact = reactDoc.greact !== undefined ? reactDoc.greact : true;
-          const canReact = isGroup ? canGroupReact : canInboxReact;
-
-          if (canReact && typeof handleAutoReact === 'function') {
-            await handleAutoReact(sachiya, mek).catch(() => {});
-          }
-
-          if (readDoc && readDoc.enabled === true && typeof handleAutoread === 'function') {
-            await handleAutoread(sachiya, mek).catch(() => {});
-          }
-        }
-      } catch (e) {}
-
       const from = mek.key.remoteJid;
-
       let msgType = getContentType(mek.message);
       if (msgType === 'ephemeralMessage') {
         mek.message = mek.message.ephemeralMessage.message;
@@ -465,40 +246,15 @@ async function startSingleSession(sessionDoc) {
       } else if (msgType === 'viewOnceMessage') {
         mek.message = mek.message.viewOnceMessage.message;
         msgType = getContentType(mek.message);
-      } else if (msgType === 'viewOnceMessageV2') {
-        mek.message = mek.message.viewOnceMessageV2.message;
-        msgType = getContentType(mek.message);
       }
 
       const rawBody = (msgType === 'conversation') ? mek.message.conversation :
                       (msgType === 'extendedTextMessage') ? mek.message.extendedTextMessage.text :
                       (msgType === 'imageMessage') ? mek.message.imageMessage.caption :
                       (msgType === 'videoMessage') ? mek.message.videoMessage.caption :
-                      (msgType === 'audioMessage') ? "audio" :
-                      (mek.message?.listResponseMessage?.title) ? mek.message.listResponseMessage.title :
-                      (mek.message?.buttonsResponseMessage?.selectedButtonId) ? mek.message.buttonsResponseMessage.selectedButtonId :
                       mek.text || '';
       
       const bodyText = rawBody ? String(rawBody) : '';
-
-      if (global.blockedChatsCache && global.blockedChatsCache.includes(from)) {
-          const trimmedBody = bodyText.startsWith(prefix) ? bodyText.slice(prefix.length).trim().toLowerCase() : '';
-          const isAllowedCmd = trimmedBody.startsWith('block') || trimmedBody.startsWith('unblock');
-          if (!isAllowedCmd) return; 
-      }
-
-      const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
-      if (isRevoke) {
-        try {
-          const deleteDoc = await AntideleteModel.findOne({ _id: 'sachiyamd_antidelete_status' });
-          if (deleteDoc && deleteDoc.enabled === true) {
-            await handleMessageRevocation(sachiya, mek);
-          }
-        } catch (e) {}
-        return;
-      } else {
-        await storeMessage(sachiya, mek);
-      }
 
       const m = sms(sachiya, mek);
       const quoted = m.quoted ? m.quoted : null;
@@ -530,7 +286,6 @@ async function startSingleSession(sessionDoc) {
 
       const cmd = commands.find((c) => c.pattern === commandName || (c.alias && c.alias.includes(commandName)));
       if (cmd) {
-        if (cmd.react) await sachiya.sendMessage(from, { react: { text: cmd.react, key: mek.key } }).catch(() => {});
         try {
           await cmd.function(sachiya, mek, m, {
             from, quoted, body, isCmd, command: commandName, args, q, reply, isGroup, sender, senderNumber, isOwner
@@ -540,18 +295,13 @@ async function startSingleSession(sessionDoc) {
         }
       }
     } catch (err) {
-      if (!handleSilentErrors(err)) {
-        console.error("❌ Message Upsert Error:", err);
-      }
+      console.error("❌ Message Upsert Error:", err.message);
     }
   });
 }
 
 async function connectToWA() {
-  if (!global.hasLoggedConsoleOnce) {
-    console.log("\n⏳ Connecting SACHIYA MD All Sessions from MongoDB ✨...");
-  }
-
+  console.log("\n⏳ Fetching Sessions from MongoDB Atlas...");
   await loadBlockedListIntoCache();
   const allSessions = await loadAllSessionsFromMongo();
 
@@ -560,11 +310,11 @@ async function connectToWA() {
     return;
   }
 
-  console.log(`📦 Found ${allSessions.length} session(s) in MongoDB. Starting connections...`);
+  console.log(`📦 Found ${allSessions.length} session(s) in MongoDB. Initializing sockets...`);
 
   for (const sessionDoc of allSessions) {
     startSingleSession(sessionDoc).catch(err => {
-      console.error(`❌ Error starting session ${sessionDoc._id}:`, err);
+      console.error(`❌ Error starting session ${sessionDoc._id}:`, err.message);
     });
   }
 }
@@ -573,11 +323,7 @@ loadPlugins();
 connectToWA();
 
 app.get("/", (req, res) => {
-  res.send("Hey, SACHIYA MD started successfully with Multi-Session MongoDB! ✅");
+  res.send("SACHIYA MD Multi-Session Server is running successfully! ✅");
 });
-
-setInterval(() => {
-  http.get(`http://localhost:${port}/`, () => {}).on('error', () => {});
-}, 30000);
 
 server.listen(port, () => console.log(`🚀 Server listening on http://localhost:${port}`));
