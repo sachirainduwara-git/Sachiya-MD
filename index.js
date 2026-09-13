@@ -18,13 +18,6 @@ const config = require('./config');
 const { sms } = require('./lib/msg');
 const { commands } = require('./command');
 
-const { storeMessage, handleMessageRevocation } = require('./plugins/antidelete');
-const { handleAutoread } = require('./plugins/autoread');
-const { handleAutoReact } = require('./plugins/autoreact');
-const { handleAutoStatus } = require('./plugins/autostatus');
-
-global.activeSettingsMenus = global.activeSettingsMenus || new Map();
-
 const app = express();
 const port = process.env.PORT || 8000;
 const server = http.createServer(app);
@@ -33,8 +26,6 @@ const prefix = config.PREFIX || '.';
 const ownerNumber = [config.OWNER_NUM || '94760579211'];
 
 global.blockedChatsCache = [];
-global.hasSentBootMessage = false; 
-global.hasLoggedConsoleOnce = false; 
 
 const SessionSchema = new mongoose.Schema({
   _id: { type: String, required: true },
@@ -47,12 +38,6 @@ const BlockSchema = new mongoose.Schema({
   blockedChats: { type: Array, default: [] }
 });
 const BlockModel = mongoose.models.BlockList || mongoose.model('BlockList', BlockSchema);
-
-const AntiCallModel = mongoose.models.AntiCall || mongoose.model('AntiCall', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
-const AntideleteModel = mongoose.models.Antidelete || mongoose.model('Antidelete', new mongoose.Schema({ _id: { type: String, required: true }, enabled: { type: Boolean, default: false } }));
-const AutoReactModel = mongoose.models.AutoReact || mongoose.model('AutoReact', new mongoose.Schema({ _id: { type: String, required: true }, ireact: { type: Boolean, default: true }, greact: { type: Boolean, default: true } }));
-const AutoReadModel = mongoose.models.AutoRead || mongoose.model('AutoRead', new mongoose.Schema({ _id: { type: String, required: true }, enabled: { type: Boolean, default: false } }));
-const AutoStatusModel = mongoose.models.AutoStatus || mongoose.model('AutoStatus', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
 
 async function loadAllSessionsFromMongo() {
   if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return [];
@@ -99,25 +84,9 @@ async function clearMongoSession(sessionId) {
       await mongoose.connect(config.SESSION_ID, { serverSelectionTimeoutMS: 5000 });
     }
     await SessionModel.deleteOne({ _id: sessionId });
-    console.log(`🗑️ MongoDB session (${sessionId}) cleared due to logout.`);
+    console.log(`🗑️ MongoDB session (${sessionId}) cleared due to logout/invalid state.`);
   } catch (e) {
     console.error("❌ MongoDB Session Clear Error:", e.message);
-  }
-}
-
-async function loadBlockedListIntoCache() {
-  try {
-    if (mongoose.connection.readyState === 0 && config.SESSION_ID) {
-      await mongoose.connect(config.SESSION_ID, { serverSelectionTimeoutMS: 5000 });
-    }
-    const doc = await BlockModel.findOne({ _id: 'sachiyamd_blocks' });
-    if (doc && doc.blockedChats) {
-      global.blockedChatsCache = doc.blockedChats;
-    } else {
-      global.blockedChatsCache = [];
-    }
-  } catch (e) {
-    global.blockedChatsCache = [];
   }
 }
 
@@ -155,16 +124,17 @@ async function startSingleSession(sessionDoc) {
   const sessionId = sessionDoc._id;
   const authFolder = path.join(__dirname, `/auth_info_${sessionId}/`);
 
-  if (!fs.existsSync(authFolder)) {
-    fs.mkdirSync(authFolder, { recursive: true });
+  if (fs.existsSync(authFolder)) {
+    fs.rmSync(authFolder, { recursive: true, force: true });
   }
+  fs.mkdirSync(authFolder, { recursive: true });
 
   if (sessionDoc.data) {
     fs.writeFileSync(path.join(authFolder, 'creds.json'), JSON.stringify(sessionDoc.data, null, 2));
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-  const logger = P({ level: 'info' }); // Enabled info level to track socket state changes clearly
+  const logger = P({ level: 'silent' });
 
   const messageInMemoryStore = new Map();
 
@@ -181,41 +151,27 @@ async function startSingleSession(sessionDoc) {
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
     getMessage: async (key) => {
-      const msgId = key.id;
-      if (messageInMemoryStore.has(msgId)) {
-        return messageInMemoryStore.get(msgId);
-      }
-      return undefined;
+      return messageInMemoryStore.get(key.id) || undefined;
     }
   });
-
-  let isConnectedOnce = false;
 
   sachiya.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update;
     
     if (connection === 'close') {
-      isConnectedOnce = false;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       console.log(`⚠️ Connection closed for session ${sessionId} with status code: ${statusCode}`);
       
-      if (statusCode === DisconnectReason.loggedOut) {
-        console.error(`❌ Session (${sessionId}) logged out from WhatsApp! Clearing from MongoDB...`);
+      if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+        console.error(`❌ Session (${sessionId}) is invalid or logged out! Clearing from MongoDB...`);
         await clearMongoSession(sessionId);
         if (fs.existsSync(authFolder)) {
           fs.rmSync(authFolder, { recursive: true, force: true });
         }
-      } else {
-        setTimeout(() => startSingleSession(sessionDoc), 5000);
       }
     } else if (connection === 'open') {
-      if (isConnectedOnce) return;
-      isConnectedOnce = true;
-
       console.log(`🚀 Session Successfully Connected & Active: ${sessionId}`);
-
       await saveSessionToMongo(authFolder, sessionId);
-      await loadBlockedListIntoCache();
     }
   });
 
@@ -230,12 +186,8 @@ async function startSingleSession(sessionDoc) {
       const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
-      if (mek.key && mek.key.id && mek.message) {
+      if (mek.key && mek.key.id) {
         messageInMemoryStore.set(mek.key.id, mek.message);
-        if (messageInMemoryStore.size > 1000) {
-          const firstKey = messageInMemoryStore.keys().next().value;
-          messageInMemoryStore.delete(firstKey);
-        }
       }
 
       const from = mek.key.remoteJid;
@@ -302,7 +254,6 @@ async function startSingleSession(sessionDoc) {
 
 async function connectToWA() {
   console.log("\n⏳ Fetching Sessions from MongoDB Atlas...");
-  await loadBlockedListIntoCache();
   const allSessions = await loadAllSessionsFromMongo();
 
   if (allSessions.length === 0) {
