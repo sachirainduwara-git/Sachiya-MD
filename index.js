@@ -59,7 +59,7 @@ const AutoReadModel = mongoose.models.AutoRead || mongoose.model('AutoRead', new
 const AutoStatusModel = mongoose.models.AutoStatus || mongoose.model('AutoStatus', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
 
 async function loadSessionFromMongo() {
-  if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return;
+  if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return false;
   try {
     if (mongoose.connection.readyState === 0) {
       await mongoose.connect(config.SESSION_ID, { serverSelectionTimeoutMS: 5000 });
@@ -73,10 +73,12 @@ async function loadSessionFromMongo() {
       if (!global.hasLoggedConsoleOnce) {
         console.log("✅ Session loaded successfully from MongoDB Atlas!");
       }
+      return true;
     }
   } catch (e) {
     console.error("❌ MongoDB Session Load Error:", e);
   }
+  return false;
 }
 
 async function saveSessionToMongo() {
@@ -229,12 +231,13 @@ async function connectToWA() {
     fs.mkdirSync(authFolder, { recursive: true });
   }
 
-  await Promise.all([loadSessionFromMongo(), loadBlockedListIntoCache()]);
+  // 🔍 Check and Load Session from MongoDB First
+  const hasSessionInMongo = await loadSessionFromMongo();
+  await loadBlockedListIntoCache();
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
-  // 🚀 Ultra Optimized Message Store Map for Fixed Decryption & Speed
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -249,7 +252,6 @@ async function connectToWA() {
     fireInitQueries: true, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
-    // 🛠️ 100% Fixed "Waiting for this message" Bug by properly returning actual message payload
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -260,25 +262,10 @@ async function connectToWA() {
     }
   });
 
-  if (!sachiya.authState.creds.registered) {
-    let targetNumber = (config.OWNER_NUM || ownerNumber[0]).replace(/[^0-9]/g, '');
-    
-    if (!targetNumber) {
-      console.log("❌ OWNER_NUM / Phone Number is missing in config.js!");
-    } else {
-      console.log(`⚠️ Requesting Pairing Code instantly for number: ${targetNumber}`);
-      setTimeout(async () => {
-        try {
-          let code = await sachiya.requestPairingCode(targetNumber);
-          code = code?.match(/.{1,4}/g)?.join("-") || code;
-          console.log("\n========================================");
-          console.log(`🔥 YOUR PAIRING CODE:  [  ${code}  ]`);
-          console.log("========================================");
-        } catch (err) {
-          console.error("❌ Pairing Code generation error:", err.message || err);
-        }
-      }, 3000);
-    }
+  // 🛡️ STRICT CHECK: Only run bot / connect if session exists in MongoDB / Creds registered
+  if (!hasSessionInMongo || !sachiya.authState.creds.registered) {
+    console.log("❌ No Active Session Found in MongoDB! Please pair your bot via web first.");
+    return; // Stop execution so it won't crash or loop endlessly without session
   } else {
     if (!global.hasLoggedConsoleOnce) {
       console.log("⚡ Active Session Found! Connected successfully...");
@@ -354,7 +341,7 @@ async function connectToWA() {
     await saveSessionToMongo();
   });
 
-  // --- AntiCall Live DB Check & Instant Block Event (Fixed for Groups) ---
+  // --- AntiCall Live DB Check & Instant Block Event ---
   sachiya.ev.on('call', async (chats) => {
     try {
       const callDoc = await AntiCallModel.findOne({ _id: 'sachiyamd_anticall_status' });
@@ -381,7 +368,6 @@ async function connectToWA() {
       const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
-      // 🚀 Ultra Speed Message Caching for Decryption & Anti-Bug
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
         if (messageInMemoryStore.size > 1000) {
@@ -390,7 +376,6 @@ async function connectToWA() {
         }
       }
 
-      // --- Handle Settings Menu Multi-Replies ---
       const quotedMsg = mek.message.extendedTextMessage?.contextInfo;
       const stanzaId = quotedMsg?.stanzaId;
       
@@ -459,7 +444,6 @@ async function connectToWA() {
         }
       }
 
-      // --- Handle Status Broadcasts (Instant DB Check) ---
       if (mek.key && mek.key.remoteJid === 'status@broadcast') {
         try {
           const statusDoc = await AutoStatusModel.findOne({ _id: 'sachiyamd_autostatus_settings' });
@@ -472,7 +456,6 @@ async function connectToWA() {
         return;
       }
 
-      // --- AutoRead and AutoReact Execution (Instant DB Check) ---
       try {
         if (!mek.key.fromMe) {
           const reactDoc = await AutoReactModel.findOne({ _id: 'sachiyamd_autoreact_settings' }) || await AutoReactModel.create({ _id: 'sachiyamd_autoreact_settings', ireact: true, greact: true });
@@ -524,7 +507,6 @@ async function connectToWA() {
           if (!isAllowedCmd) return; 
       }
 
-      // --- Anti-Delete Message Handling (Instant DB Check) ---
       const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
       if (isRevoke) {
         try {
