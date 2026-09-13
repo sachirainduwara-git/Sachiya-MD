@@ -33,7 +33,6 @@ const server = http.createServer(app);
 
 const prefix = config.PREFIX || '.';
 const ownerNumber = [config.OWNER_NUM || '94760579211'];
-const authFolder = path.join(__dirname, '/auth_info_baileys/');
 
 global.blockedChatsCache = [];
 global.hasSentBootMessage = false; 
@@ -58,28 +57,21 @@ const AutoReactModel = mongoose.models.AutoReact || mongoose.model('AutoReact', 
 const AutoReadModel = mongoose.models.AutoRead || mongoose.model('AutoRead', new mongoose.Schema({ _id: { type: String, required: true }, enabled: { type: Boolean, default: false } }));
 const AutoStatusModel = mongoose.models.AutoStatus || mongoose.model('AutoStatus', new mongoose.Schema({ _id: { type: String, required: true }, status: { type: Boolean, default: false } }));
 
-async function loadSessionFromMongo() {
-  if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return;
+async function loadAllSessionsFromMongo() {
+  if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return [];
   try {
     if (mongoose.connection.readyState === 0) {
       await mongoose.connect(config.SESSION_ID, { serverSelectionTimeoutMS: 5000 });
     }
-    const sessionDoc = await SessionModel.findOne({ _id: 'sachiyamd_creds' });
-    if (sessionDoc && sessionDoc.data) {
-      if (!fs.existsSync(authFolder)) {
-        fs.mkdirSync(authFolder, { recursive: true });
-      }
-      fs.writeFileSync(path.join(authFolder, 'creds.json'), JSON.stringify(sessionDoc.data, null, 2));
-      if (!global.hasLoggedConsoleOnce) {
-        console.log("✅ Session loaded successfully from MongoDB Atlas!");
-      }
-    }
+    const sessionDocs = await SessionModel.find({});
+    return sessionDocs;
   } catch (e) {
-    console.error("❌ MongoDB Session Load Error:", e);
+    console.error("❌ MongoDB All Sessions Load Error:", e);
+    return [];
   }
 }
 
-async function saveSessionToMongo() {
+async function saveSessionToMongo(authFolder, sessionId) {
   if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return;
   try {
     const credsPath = path.join(authFolder, 'creds.json');
@@ -94,7 +86,7 @@ async function saveSessionToMongo() {
     }
 
     await SessionModel.findOneAndUpdate(
-      { _id: 'sachiyamd_creds' },
+      { _id: sessionId },
       { data: credsData },
       { upsert: true, new: true }
     );
@@ -103,14 +95,14 @@ async function saveSessionToMongo() {
   }
 }
 
-async function clearMongoSession() {
+async function clearMongoSession(sessionId) {
   if (!config.SESSION_ID || !config.SESSION_ID.startsWith('mongodb+srv://')) return;
   try {
     if (mongoose.connection.readyState === 0) {
       await mongoose.connect(config.SESSION_ID, { serverSelectionTimeoutMS: 5000 });
     }
-    await SessionModel.deleteOne({ _id: 'sachiyamd_creds' });
-    console.log("🗑️ MongoDB session cleared due to logout.");
+    await SessionModel.deleteOne({ _id: sessionId });
+    console.log(`🗑️ MongoDB session (${sessionId}) cleared due to logout.`);
   } catch (e) {
     console.error("❌ MongoDB Session Clear Error:", e);
   }
@@ -220,21 +212,21 @@ function loadPlugins() {
   }
 }
 
-async function connectToWA() {
-  if (!global.hasLoggedConsoleOnce) {
-    console.log("\n⏳ Connecting SACHIYA MD ✨...");
-  }
+async function startSingleSession(sessionDoc) {
+  const sessionId = sessionDoc._id;
+  const authFolder = path.join(__dirname, `/auth_info_${sessionId}/`);
 
   if (!fs.existsSync(authFolder)) {
     fs.mkdirSync(authFolder, { recursive: true });
   }
 
-  await Promise.all([loadSessionFromMongo(), loadBlockedListIntoCache()]);
+  if (sessionDoc.data) {
+    fs.writeFileSync(path.join(authFolder, 'creds.json'), JSON.stringify(sessionDoc.data, null, 2));
+  }
 
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
   const logger = P({ level: 'silent' });
 
-  // 🚀 Ultra Optimized Message Store Map for Fixed Decryption & Speed
   const messageInMemoryStore = new Map();
 
   const sachiya = makeWASocket({
@@ -249,7 +241,6 @@ async function connectToWA() {
     fireInitQueries: true, 
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: false,
-    // 🛠️ 100% Fixed "Waiting for this message" Bug by properly returning actual message payload
     getMessage: async (key) => {
       const msgId = key.id;
       if (messageInMemoryStore.has(msgId)) {
@@ -259,31 +250,6 @@ async function connectToWA() {
       return undefined;
     }
   });
-
-  if (!sachiya.authState.creds.registered) {
-    let targetNumber = (config.OWNER_NUM || ownerNumber[0]).replace(/[^0-9]/g, '');
-    
-    if (!targetNumber) {
-      console.log("❌ OWNER_NUM / Phone Number is missing in config.js!");
-    } else {
-      console.log(`⚠️ Requesting Pairing Code instantly for number: ${targetNumber}`);
-      setTimeout(async () => {
-        try {
-          let code = await sachiya.requestPairingCode(targetNumber);
-          code = code?.match(/.{1,4}/g)?.join("-") || code;
-          console.log("\n========================================");
-          console.log(`🔥 YOUR PAIRING CODE:  [  ${code}  ]`);
-          console.log("========================================");
-        } catch (err) {
-          console.error("❌ Pairing Code generation error:", err.message || err);
-        }
-      }, 3000);
-    }
-  } else {
-    if (!global.hasLoggedConsoleOnce) {
-      console.log("⚡ Active Session Found! Connected successfully...");
-    }
-  }
 
   let isConnectedOnce = false;
 
@@ -295,14 +261,13 @@ async function connectToWA() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       
       if (statusCode === DisconnectReason.loggedOut) {
-        console.error("❌ Session logged out from WhatsApp! Clearing MongoDB session...");
-        await clearMongoSession();
+        console.error(`❌ Session (${sessionId}) logged out from WhatsApp! Clearing from MongoDB...`);
+        await clearMongoSession(sessionId);
         if (fs.existsSync(authFolder)) {
           fs.rmSync(authFolder, { recursive: true, force: true });
         }
-        process.exit(1);
       } else {
-        setTimeout(() => connectToWA(), 3000);
+        setTimeout(() => startSingleSession(sessionDoc), 3000);
       }
     } else if (connection === 'open') {
       if (isConnectedOnce) return;
@@ -315,7 +280,9 @@ async function connectToWA() {
         console.log('╰─────────────────────────────────────⁠╯⁠\n');
       }
 
-      await saveSessionToMongo();
+      console.log(`✅ Connected Session Device: ${sessionId}`);
+
+      await saveSessionToMongo(authFolder, sessionId);
       await loadBlockedListIntoCache();
 
       if (!global.hasSentBootMessage) {
@@ -351,10 +318,10 @@ async function connectToWA() {
 
   sachiya.ev.on('creds.update', async () => {
     await saveCreds();
-    await saveSessionToMongo();
+    await saveSessionToMongo(authFolder, sessionId);
   });
 
-  // --- AntiCall Live DB Check & Instant Block Event (Fixed for Groups) ---
+  // --- AntiCall Live DB Check & Instant Block Event ---
   sachiya.ev.on('call', async (chats) => {
     try {
       const callDoc = await AntiCallModel.findOne({ _id: 'sachiyamd_anticall_status' });
@@ -381,7 +348,6 @@ async function connectToWA() {
       const mek = chatUpdate.messages[0];
       if (!mek || !mek.message) return;
       
-      // 🚀 Ultra Speed Message Caching for Decryption & Anti-Bug
       if (mek.key && mek.key.id && mek.message) {
         messageInMemoryStore.set(mek.key.id, mek.message);
         if (messageInMemoryStore.size > 1000) {
@@ -390,7 +356,6 @@ async function connectToWA() {
         }
       }
 
-      // --- Handle Settings Menu Multi-Replies ---
       const quotedMsg = mek.message.extendedTextMessage?.contextInfo;
       const stanzaId = quotedMsg?.stanzaId;
       
@@ -459,7 +424,6 @@ async function connectToWA() {
         }
       }
 
-      // --- Handle Status Broadcasts (Instant DB Check) ---
       if (mek.key && mek.key.remoteJid === 'status@broadcast') {
         try {
           const statusDoc = await AutoStatusModel.findOne({ _id: 'sachiyamd_autostatus_settings' });
@@ -472,7 +436,6 @@ async function connectToWA() {
         return;
       }
 
-      // --- AutoRead and AutoReact Execution (Instant DB Check) ---
       try {
         if (!mek.key.fromMe) {
           const reactDoc = await AutoReactModel.findOne({ _id: 'sachiyamd_autoreact_settings' }) || await AutoReactModel.create({ _id: 'sachiyamd_autoreact_settings', ireact: true, greact: true });
@@ -524,7 +487,6 @@ async function connectToWA() {
           if (!isAllowedCmd) return; 
       }
 
-      // --- Anti-Delete Message Handling (Instant DB Check) ---
       const isRevoke = mek.message?.protocolMessage && mek.message.protocolMessage.type === 0;
       if (isRevoke) {
         try {
@@ -585,11 +547,33 @@ async function connectToWA() {
   });
 }
 
+async function connectToWA() {
+  if (!global.hasLoggedConsoleOnce) {
+    console.log("\n⏳ Connecting SACHIYA MD All Sessions from MongoDB ✨...");
+  }
+
+  await loadBlockedListIntoCache();
+  const allSessions = await loadAllSessionsFromMongo();
+
+  if (allSessions.length === 0) {
+    console.log("❌ No sessions found in MongoDB Atlas! Please link at least one device.");
+    return;
+  }
+
+  console.log(`📦 Found ${allSessions.length} session(s) in MongoDB. Starting connections...`);
+
+  for (const sessionDoc of allSessions) {
+    startSingleSession(sessionDoc).catch(err => {
+      console.error(`❌ Error starting session ${sessionDoc._id}:`, err);
+    });
+  }
+}
+
 loadPlugins();
 connectToWA();
 
 app.get("/", (req, res) => {
-  res.send("Hey, SACHIYA MD started successfully with MongoDB! ✅");
+  res.send("Hey, SACHIYA MD started successfully with Multi-Session MongoDB! ✅");
 });
 
 setInterval(() => {
