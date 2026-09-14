@@ -1,11 +1,11 @@
 const { cmd, commands } = require('../command');
-const fg = require('api-dylux'); // බොහෝ බොට්ස් වල සින්දු ඇදීමට පාවිච්චි කරන ස්ථාවර ලයිබ්‍රරියක්
 const ytSearch = require('yt-search');
+const axios = require('axios');
 
 cmd({
     pattern: "song",
     alias: ["audio", "play"],
-    desc: "Download YouTube songs safely without errors",
+    desc: "Download YouTube songs safely using reliable API",
     category: "download",
     react: "🎵",
     filename: __filename
@@ -19,47 +19,51 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
 
         // 1. YouTube Search කිරීම
         const search = await ytSearch(q);
-        const data = search.videos[0];
-        
-        if (!data) return reply("❌ No results found for your query!");
+        if (!search.videos || !search.videos.length) {
+            return reply("❌ No results found for your query!");
+        }
 
-        const url = data.url;
+        const video = search.videos[0];
+        const videoUrl = video.url;
 
         let desc = `*─── ｢ SACHIYA-MD SONG DOWNLOADER ｣ ───*
 
-🎵 *Title:* ${data.title}
-⏱ *Duration:* ${data.timestamp}
-👀 *Views:* ${data.views}
-👤 *Author:* ${data.author.name}
-🔗 *URL:* ${url}
+🎵 *Title:* ${video.title}
+⏱ *Duration:* ${video.timestamp}
+👀 *Views:* ${video.views}
+👤 *Author:* ${video.author.name}
+🔗 *URL:* ${videoUrl}
 
 > *Downloading your audio, please wait...*`;
 
         // සින්දුවේ විස්තර සහ තම්බ්නේල් එක යැවීම
         await sachiya.sendMessage(from, {
-            image: { url: data.thumbnail },
+            image: { url: video.thumbnail },
             caption: desc
         }, { quoted: mek });
 
-        // 2. API හෝ YTDL හරහා ඔඩියෝ බෆර් එක ලබාගැනීම
-        // මෙහිදී dylux හෝ වෙනත් ස්ථාවර api එකක් මඟින් ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගනී
-        const audioStream = await fg.yta(url);
-        
-        if (!audioStream || !audioStream.dl_url) {
-            return reply("❌ Error: Failed to fetch audio stream from YouTube!");
+        // 2. ස්ක්‍රීන්ෂොට් එකේ ඇති නිවැරදි API එක හරහා ඔඩියෝ ලින්ක් එක ලබාගැනීම
+        const apiUrl = `https://apis.davidcyriltech.my.id/youtube/mp3?url=${videoUrl}`;
+        const res = await axios.get(apiUrl, { timeout: 60000 });
+
+        if (!res.data || !res.data.status || !res.data.result || !res.data.result.download_url) {
+            return reply("❌ Failed to generate audio download link. Please try again later.");
         }
+
+        const dlUrl = res.data.result.download_url;
+        const title = res.data.result.title || video.title;
 
         // 3. WhatsApp වෙත නිවැරදි Audio File එකක් ලෙස යැවීම
         await sachiya.sendMessage(from, {
-            audio: { url: audioStream.dl_url },
+            audio: { url: dlUrl },
             mimetype: 'audio/mpeg',
-            fileName: `${data.title}.mp3`,
+            fileName: `${title}.mp3`,
             contextInfo: {
                 externalAdReply: {
-                    title: data.title,
+                    title: title,
                     body: "SACHIYA-MD MUSIC PLAYER",
-                    thumbnailUrl: data.thumbnail,
-                    sourceUrl: url,
+                    thumbnailUrl: video.thumbnail,
+                    sourceUrl: videoUrl,
                     mediaType: 2,
                     renderLargerThumbnail: true
                 }
@@ -68,6 +72,6 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
 
     } catch (e) {
         console.log("Song Download Error:", e);
-        reply(`❌ Error: ${e.message}`);
+        reply(`❌ Error: ${e.message || e}`);
     }
 });
