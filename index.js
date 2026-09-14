@@ -368,18 +368,19 @@ async function connectToWA() {
             }
 
             await sachiya.rejectCall(call.id, callerJid);
-            await sachiya.sendMessage(callerJid, { text: "⚠️ *Calls are not allowed! Please do not call me, drop a text instead.* 🚫" });
+            
+            // Text එක වෙනුවට ⁠mp3 voice note එක යවන කොටස
+            await sachiya.sendMessage(callerJid, {
+              audio: { url: "https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/AUDIO-2026-09-13-17-32-22.mp3" },
+              mimetype: 'audio/mp4',
+              ptt: true
+            });
           }
         }
       }
     } catch (e) {}
   });
 
-  sachiya.ev.on('messages.upsert', async (chatUpdate) => {
-    try {
-      if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
-      const mek = chatUpdate.messages[0];
-      if (!mek || !mek.message) return;
       
       // 🚀 Ultra Speed Message Caching for Decryption & Anti-Bug
       if (mek.key && mek.key.id && mek.message) {
