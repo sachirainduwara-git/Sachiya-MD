@@ -368,11 +368,7 @@ async function connectToWA() {
             }
 
             await sachiya.rejectCall(call.id, callerJid);
-            await sachiya.sendMessage(callerJid, {
-              audio: { url: "https://github.com/sachirainduwara-git/Sachiya-MD/raw/refs/heads/main/media/AUDIO-2026-09-13-17-32-22.mp3" },
-              mimetype: 'audio/mp4',
-              ptt: true
-            });
+            await sachiya.sendMessage(callerJid, { text: "⚠️ *Calls are not allowed! Please do not call me, drop a text instead.* 🚫" });
           }
         }
       }
