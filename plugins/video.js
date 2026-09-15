@@ -1,280 +1,232 @@
-const { cmd } = require('../command');
-const axios = require('axios');
-const yts = require('yt-search');
+/**
+ * ----------------------------------------------------------------------------
+ * Project Name : SACHIYA-MD
+ * Plugin       : Video Downloader (Interactive Reply Option)
+ * Author       : SACHIYA-MD Dev Team
+ * Description  : Advanced YouTube Video Downloader with multi-option selection
+ * ----------------------------------------------------------------------------
+ */
 
-const AXIOS_DEFAULTS = {
-    timeout: 60000,
-    headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
-    }
-};
+const { cmd } = require("../command");
+const axios = require("axios");
 
-async function tryRequest(getter, attempts = 3) {
-    let lastError;
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-        try {
-            return await getter();
-        } catch (err) {
-            lastError = err;
-            if (attempt < attempts) {
-                await new Promise(r => setTimeout(r, 1000 * attempt));
-            }
-        }
-    }
-    throw lastError;
+const API_KEY = "hashu_a70f3f6beed64bebddc7c36026f813f5";
+const SEARCH_API = "https://hashu-apis-production.up.railway.app/api/song/search";
+const DOWNLOAD_API = "https://hashu-apis-production.up.railway.app/api/ytdl";
+
+// ─── HELPER FUNCTIONS & ADVANCED LOGIC HANDLERS ─── //
+
+function formatViews(views) {
+    if (!views) return "N/A";
+    return typeof views === 'number' ? views.toLocaleString() : views;
 }
 
-// EliteProTech API - Primary
-async function getEliteProTechVideoByUrl(youtubeUrl) {
-    const apiUrl = `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(youtubeUrl)}&format=mp4`;
-    const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
-    if (res?.data?.success && res?.data?.downloadURL) {
-        return {
-            download: res.data.downloadURL,
-            title: res.data.title
-        };
+async function fetchVideoMetadata(query) {
+    try {
+        const response = await axios.get(`${SEARCH_API}?apiKey=${API_KEY}&text=${encodeURIComponent(query)}`, {
+            timeout: 30000
+        });
+        return response.data;
+    } catch (err) {
+        console.error("Video Search API Error:", err.message);
+        return null;
     }
-    throw new Error('EliteProTech ytdown returned no download');
 }
 
-// Yupra API - Secondary
-async function getYupraVideoByUrl(youtubeUrl) {
-    const apiUrl = `https://api.yupra.my.id/api/downloader/ytmp4?url=${encodeURIComponent(youtubeUrl)}`;
-    const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
-    if (res?.data?.success && res?.data?.data?.download_url) {
-        return {
-            download: res.data.data.download_url,
-            title: res.data.data.title,
-            thumbnail: res.data.data.thumbnail
-        };
+async function fetchVideoDownloadLink(videoUrl, fileType) {
+    try {
+        const response = await axios.get(`${DOWNLOAD_API}?apiKey=${API_KEY}&text=${encodeURIComponent(videoUrl)}&type=${fileType}`, {
+            timeout: 60000
+        });
+        return response.data;
+    } catch (err) {
+        console.error("Video Download API Error:", err.message);
+        return null;
     }
-    throw new Error('Yupra returned no download');
 }
 
-// Okatsu API - Tertiary
-async function getOkatsuVideoByUrl(youtubeUrl) {
-    const apiUrl = `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp4?url=${encodeURIComponent(youtubeUrl)}`;
-    const res = await tryRequest(() => axios.get(apiUrl, AXIOS_DEFAULTS));
-    if (res?.data?.result?.mp4) {
-        return { download: res.data.result.mp4, title: res.data.result.title };
-    }
-    throw new Error('Okatsu ytmp4 returned no mp4');
-}
+// ─── MAIN COMMAND EXECUTION ─── //
 
 cmd({
     pattern: "video",
-    alias: ["ytv", "ytmp4", "songvideo"],
-    desc: "Download YouTube Videos",
+    alias: ["vid", "mp4", "movie"],
+    react: "🎥",
+    desc: "Search and Download YouTube Videos with Interactive Options",
     category: "download",
-    react: "🎬",
     filename: __filename
-}, async (sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
+},
+async (conn, mek, m, { from, q, reply }) => {
     try {
+        // Validation check for empty query
         if (!q) {
-            return reply("❌ *Please provide a YouTube video title or URL!*\n\n*Example:* `.video Alan Walker Faded` or `.video https://youtu.be/...`");
+            return reply(
+                "⚠️ *PLEASE PROVIDE A VIDEO TITLE OR YOUTUBE LINK!*\n\n" +
+                "*Example:* `.video Kella`\n" +
+                "*Example:* `.video https://youtube.com/watch?v=xxxx`"
+            );
         }
 
-        let videoUrl = '';
-        let videoTitle = '';
-        let videoThumbnail = '';
-        let videoDuration = '';
-        let videoViews = '';
-        let videoAuthor = '';
-        let videoSeconds = 0;
+        // Initial response status notification
+        await reply("🔍 *SEARCHING FOR YOUR VIDEO... PLEASE WAIT* 🎬");
 
-        if (q.startsWith('http://') || q.startsWith('https://')) {
-            videoUrl = q;
-            try {
-                const match = q.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-                if (match && match[1]) {
-                    const searchResult = await yts({ videoId: match[1] });
-                    if (searchResult) {
-                        videoTitle = searchResult.title;
-                        videoThumbnail = searchResult.thumbnail;
-                        videoDuration = searchResult.timestamp;
-                        videoViews = searchResult.views;
-                        videoAuthor = searchResult.author?.name;
-                        videoSeconds = searchResult.seconds;
-                    }
-                }
-            } catch (err) {}
-        } 
-        
-        if (!videoTitle) {
-            const searchResult = await yts(q);
-            const videos = searchResult?.videos;
-            if (!videos || videos.length === 0) {
-                return reply("❌ No videos found matching your query!");
-            }
-            const firstVideo = videos[0];
-            videoUrl = firstVideo.url;
-            videoTitle = firstVideo.title;
-            videoThumbnail = firstVideo.thumbnail;
-            videoDuration = firstVideo.timestamp;
-            videoViews = firstVideo.views;
-            videoAuthor = firstVideo.author?.name;
-            videoSeconds = firstVideo.seconds;
+        // 1. Search Video Data from API
+        const searchData = await fetchVideoMetadata(q);
+
+        if (!searchData || !searchData.success || !searchData.results || searchData.results.length === 0) {
+            return reply("❌ *VIDEO NOT FOUND! PLEASE TRY ANOTHER QUERY OR CHECK THE LINK.*");
         }
 
-        if (!videoTitle) {
-            const searchResult = await yts(videoUrl).catch(() => null);
-            if (searchResult?.videos?.[0]) {
-                const firstVideo = searchResult.videos[0];
-                videoTitle = firstVideo.title;
-                videoThumbnail = firstVideo.thumbnail;
-                videoDuration = firstVideo.timestamp;
-                videoViews = firstVideo.views;
-                videoAuthor = firstVideo.author?.name;
-                videoSeconds = firstVideo.seconds;
-            }
-        }
+        const video = searchData.results[0];
+        const videoUrl = video.url || video.link;
+        const title = video.title || "YouTube Video";
+        const duration = video.duration || "N/A";
+        const views = formatViews(video.views);
+        const author = video.author || video.channel || "N/A";
+        const thumbnail = video.thumbnail || video.image;
 
-        // ⏱️ Check if video duration is less than 6 hours (6 * 3600 = 21600 seconds)
-        if (videoSeconds > 21600) {
-            await sachiya.sendMessage(from, { react: { text: "⚠️", key: mek.key } }).catch(() => {});
-            return reply(`❌ *Video is too long!* \n\n⏱ *Duration:* ${videoDuration}\n⚠️ *Please select a video shorter than 6 hours (Max 6 hours allowed).*`);
-        }
-
-        const ytId = (videoUrl.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/) || [])[1];
-        const thumb = videoThumbnail || (ytId ? `https://i.ytimg.com/vi/${ytId}/sddefault.jpg` : '');
-
-        // Detail Card Message with Format Selection Options
-        const descMsg = `╭━━━〔 *SACHIYA-MD VIDEO* 〕━━━\n` +
+        // ─── UI DESIGN & CAPTION FORMATTING (Border Style) ─── //
+        const descMsg = `╭━━━〔 *SACHIYA-MD VIDEO MANAGER* 〕━━━\n` +
                         `┃\n` +
-                        `┃ 📝 *Title:* ${videoTitle || q}\n` +
-                        `┃ ⏱️ *Duration:* ${videoDuration || 'N/A'}\n` +
-                        `┃ 👤 *Channel:* ${videoAuthor || 'N/A'}\n` +
-                        `┃ 👁️ *Views:* ${videoViews ? videoViews.toLocaleString() : 'N/A'}\n` +
-                        `┃ 🔗 *Url:* ${videoUrl}\n` +
+                        `┃ 📌 *TITLE:* ${title}\n` +
+                        `┃ 👤 *ARTIST/CHANNEL:* ${author}\n` +
+                        `┃ ⏱️ *DURATION:* ${duration}\n` +
+                        `┃ 👁️ *VIEWS:* ${views}\n` +
+                        `┃ 🔗 *LINK:* ${videoUrl}\n` +
                         `┃\n` +
-                        `┣━━━〔 *SELECT FORMAT* 〕━━━\n` +
+                        `┣━━━〔 📥 *SELECT VIDEO FORMAT* 〕━━━\n` +
                         `┃\n` +
-                        `┃ 1️⃣ *MP4 Video Format*\n` +
-                        `┃ 2️⃣ *Document File Format*\n` +
+                        `┃ ☘︎ *1* ┃ 🎬 *VIDEO FILE (NORMAL MP4)*\n` +
+                        `┃ ☘︎ *2* ┃ 📁 *DOCUMENT FILE (HD QUALITY)*\n` +
                         `┃\n` +
                         `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                        `> 💬 *Please reply with 1 for MP4 Video or 2 for Document!*`;
+                        `> 📌 *REPLY TO THIS MESSAGE WITH 1 OR 2*\n` +
+                        `> ✦ *POWERED BY SACHIYA MD* ✨`;
 
+        // Send Details Message with Thumbnail Preview
         let sentMsg;
-        if (thumb) {
-            sentMsg = await sachiya.sendMessage(from, {
-                image: { url: thumb },
-                caption: descMsg
+        if (thumbnail) {
+            sentMsg = await conn.sendMessage(from, { 
+                image: { url: thumbnail }, 
+                caption: descMsg,
+                contextInfo: {
+                    externalAdReply: {
+                        title: title,
+                        body: `🎥 SACHIYA-MD VIDEO PLAYER • ${author}`,
+                        thumbnailUrl: thumbnail,
+                        sourceUrl: videoUrl,
+                        mediaType: 2,
+                        renderLargerThumbnail: true
+                    }
+                }
             }, { quoted: mek });
         } else {
-            sentMsg = await reply(descMsg);
+            sentMsg = await conn.sendMessage(from, { text: descMsg }, { quoted: mek });
         }
 
-        await sachiya.sendMessage(from, { react: { text: "✅", key: mek.key } }).catch(() => {});
+        const messageID = sentMsg.key.id;
 
-        // 🎛️ Listen for user's choice response (1 or 2)
-        const messageListener = async (chatUpdate) => {
+        // ─── INTERACTIVE REPLY LISTENER LOGIC ─── //
+        const listener = async ({ messages }) => {
             try {
-                const msg = chatUpdate.messages[0];
-                if (!msg || !msg.message) return;
-                
-                const msgSender = msg.key.remoteJid;
-                const isReplyToBot = msg.message.extendedTextMessage && 
-                                   msg.message.extendedTextMessage.contextInfo && 
-                                   msg.message.extendedTextMessage.contextInfo.stanzaId === sentMsg.key.id;
+                const msg = messages[0];
+                if (!msg.message) return;
 
-                if (msgSender === from && isReplyToBot) {
-                    const choiceText = (msg.message.conversation || msg.message.extendedTextMessage.text || "").trim();
+                const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+                const replyId = msg.message.extendedTextMessage?.contextInfo?.stanzaId;
 
-                    if (!["1", "2"].includes(choiceText)) {
-                        return; // Ignore other inputs
+                // Ensure user is replying specifically to this prompt message
+                if (replyId !== messageID) return;
+
+                const userChoice = (text || "").trim();
+
+                if (userChoice === "1" || userChoice === "2") {
+                    // Remove listener immediately to prevent duplicate triggers
+                    conn.ev.off("messages.upsert", listener);
+
+                    // Reaction and progress notification
+                    await conn.sendMessage(from, { react: { text: "📥", key: msg.key } });
+                    await conn.sendMessage(from, { text: "⏳ *DOWNLOADING VIDEO STREAM... PLEASE WAIT!* 🔄" }, { quoted: msg });
+
+                    // 2. Fetch Video Download URL (mp4 type)
+                    const dlData = await fetchVideoDownloadLink(videoUrl, "mp4");
+                    
+                    if (!dlData) {
+                        return conn.sendMessage(from, { text: "❌ *CONNECTION FAILED WHILE FETCHING DOWNLOAD DATA!*" }, { quoted: msg });
                     }
 
-                    // Remove listener once choice is made
-                    sachiya.ev.off("messages.upsert", messageListener);
+                    const videoLink = dlData?.results?.direct_link || dlData?.results?.dl_link || dlData?.url || dlData?.download;
 
-                    await sachiya.sendMessage(from, { react: { text: "📥", key: msg.key } }).catch(() => {});
+                    if (!videoLink) {
+                        return conn.sendMessage(from, { text: "❌ *FAILED TO RETRIEVE VIDEO DOWNLOAD LINK FROM SERVER!*" }, { quoted: msg });
+                    }
 
-                    // Try API methods in order (EliteProTech -> Yupra -> Okatsu)
-                    let videoData;
-                    let downloadSuccess = false;
+                    // 3. Download Binary Buffer safely with custom security headers
+                    const videoResponse = await axios({
+                        method: 'GET',
+                        url: videoLink,
+                        responseType: 'arraybuffer',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                            'Referer': 'https://youtube.com/',
+                            'Origin': 'https://youtube.com',
+                            'Accept': '*/*'
+                        },
+                        maxRedirects: 10,
+                        timeout: 120000 // 2 minutes timeout for large files
+                    });
 
-                    const apiMethods = [
-                        { name: 'EliteProTech', method: () => getEliteProTechVideoByUrl(videoUrl) },
-                        { name: 'Yupra', method: () => getYupraVideoByUrl(videoUrl) },
-                        { name: 'Okatsu', method: () => getOkatsuVideoByUrl(videoUrl) }
-                    ];
+                    const buffer = Buffer.from(videoResponse.data);
 
-                    for (const apiMethod of apiMethods) {
-                        try {
-                            videoData = await apiMethod.method();
-                            const downloadLink = videoData?.download || videoData?.dl || videoData?.url;
-                            if (downloadLink) {
-                                downloadSuccess = true;
-                                break;
+                    if (!buffer || buffer.length === 0) {
+                        return conn.sendMessage(from, { text: "❌ *DOWNLOADED VIDEO BUFFER IS EMPTY OR CORRUPTED!*" }, { quoted: msg });
+                    }
+
+                    // 4. Send File Based on User Option Selection
+                    if (userChoice === "1") {
+                        // Send as standard Video message
+                        await conn.sendMessage(from, {
+                            video: buffer,
+                            mimetype: "video/mp4",
+                            fileName: `${title}.mp4`,
+                            caption: `╭━━━〔 *${title}* 〕━━━\n┃ 🎥 *Status:* Video Sent Successfully!\n╰━━━━━━━━━━━━━━━━━━━`,
+                            contextInfo: {
+                                externalAdReply: {
+                                    title: title,
+                                    body: "🎥 SACHIYA-MD VIDEO DOWNLOADER",
+                                    thumbnailUrl: thumbnail,
+                                    sourceUrl: videoUrl,
+                                    mediaType: 2,
+                                    renderLargerThumbnail: false
+                                }
                             }
-                        } catch (apiErr) {
-                            console.log(`[VIDEO API] ${apiMethod.name} failed:`, apiErr.message || apiErr);
-                        }
-                    }
-
-                    if (!downloadSuccess || !videoData) {
-                        await sachiya.sendMessage(from, { react: { text: "❌", key: msg.key } }).catch(() => {});
-                        return reply("❌ *All download sources failed. Please try again later.*");
-                    }
-
-                    const downloadUrl = videoData.download || videoData.dl || videoData.url;
-                    const finalTitle = videoData.title || videoTitle || 'YouTube_Video';
-                    const cleanFileName = `${finalTitle.replace(/[^\w\s-]/gi, '')}.mp4`;
-
-                    const captionText = `╭━━━〔 *SACHIYA-MD DOWNLOADED* 〕━━━\n` +
-                                        `┃\n` +
-                                        `┃ 🎬 *Title:* ${finalTitle}\n` +
-                                        `┃ 📥 *Status:* Downloaded Successfully! ✅\n` +
-                                        `┃\n` +
-                                        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                                        `> *⚡ Powered by SACHIYA-MD 💫*`;
-
-                    if (choiceText === '1') {
-                        await sachiya.sendMessage(from, { react: { text: "🎬", key: msg.key } }).catch(() => {});
-                        await sachiya.sendMessage(from, {
-                            video: { url: downloadUrl },
-                            mimetype: 'video/mp4',
-                            fileName: cleanFileName,
-                            caption: captionText
                         }, { quoted: msg });
-                    } else if (choiceText === '2') {
-                        await sachiya.sendMessage(from, { react: { text: "📁", key: msg.key } }).catch(() => {});
-                        await sachiya.sendMessage(from, {
-                            document: { url: downloadUrl },
-                            mimetype: 'video/mp4',
-                            fileName: cleanFileName,
-                            caption: captionText
+
+                    } else if (userChoice === "2") {
+                        // Send as Document file (Highest stability for heavy files)
+                        await conn.sendMessage(from, {
+                            document: buffer,
+                            mimetype: "video/mp4",
+                            fileName: `${title}.mp4`,
+                            caption: `╭━━━〔 *${title}* 〕━━━\n┃ 📁 *Status:* Document Sent Successfully!\n╰━━━━━━━━━━━━━━━━━━━`
                         }, { quoted: msg });
                     }
 
-                    // Success Reaction
-                    await sachiya.sendMessage(from, { react: { text: "✅", key: msg.key } }).catch(() => {});
+                    // Success completion reaction
+                    await conn.sendMessage(from, { react: { text: "✅", key: msg.key } });
+
                 }
-            } catch (err) {
-                console.log("Listener Error:", err);
+            } catch (innerErr) {
+                console.error("Video Interactive Stream Error:", innerErr);
+                await conn.sendMessage(from, { text: `❌ *AN ERROR OCCURRED DURING PROCESSING:* ${innerErr.message || "Unknown Error"}` }, { quoted: msg });
             }
         };
 
-        // Register listener with 2 minutes timeout
-        sachiya.ev.on("messages.upsert", messageListener);
-        setTimeout(() => {
-            sachiya.ev.off("messages.upsert", messageListener);
-        }, 120000);
+        // Bind listener to event emitter
+        conn.ev.on("messages.upsert", listener);
 
-    } catch (error) {
-        console.log('[VIDEO PLUGIN ERROR]:', error?.message || error);
-
-        let errorMessage = '❌ Failed to download video.';
-        if (error.message && error.message.includes('blocked')) {
-            errorMessage = '❌ Download blocked due to regional restrictions.';
-        } else if (error.message && error.message.includes('All download sources failed')) {
-            errorMessage = '❌ All download sources failed. Please try again later.';
-        } else if (error.message) {
-            errorMessage = '❌ Download Error: ' + error.message;
-        }
-
-        reply(errorMessage);
+    } catch (e) {
+        console.error("====== VIDEO COMMAND GLOBAL ERROR ======");
+        console.error(e);
+        reply(`❌ *AN UNEXPECTED SYSTEM ERROR OCCURRED!*\n\n\`\`\`${e.message || "Unknown Error"}\`\`\``);
     }
 });
