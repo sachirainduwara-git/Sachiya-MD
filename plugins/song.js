@@ -16,7 +16,7 @@ async (conn, mek, m, { from, q, reply }) => {
     try {
         if (!q) return reply("⚠️ *PLEASE PROVIDE A SONG TITLE OR YOUTUBE LINK!*\n\n*Example:* `.song Ma diha`");
 
-        reply("🔍 *SEARCHING FOR YOUR SONG...*");
+        reply("🔍 *SEARCHING FOR YOUR SONG...* 🎶");
 
         // 1. Search Request
         const searchRes = await axios.get(`${SEARCH_API}?apiKey=${API_KEY}&text=${encodeURIComponent(q)}`);
@@ -34,28 +34,40 @@ async (conn, mek, m, { from, q, reply }) => {
         const author = video.author || "N/A";
         const thumbnail = video.thumbnail;
 
-        const descMsg = `
-🎵 *─── [ SONG DOWNLOADER ] ───* 🎵
+        // උඹ ඉල්ලපු විදිහට බොට්ගේ ස්ටයිල් එකටම හැදූ පට්ට ලස්සන UI Border Caption එක
+        const descMsg = `╭━━━〔 *SACHIYA-MD MUSIC PLAYER* 〕━━━\n` +
+                        `┃\n` +
+                        `┃ 📌 *TITLE:* ${title}\n` +
+                        `┃ 👤 *ARTIST:* ${author}\n` +
+                        `┃ ⏱️ *DURATION:* ${duration}\n` +
+                        `┃ 👀 *VIEWS:* ${views}\n` +
+                        `┃\n` +
+                        `┣━━━〔 📥 *SELECT AN OPTION* 〕━━━\n` +
+                        `┃\n` +
+                        `┃ ☘︎ *1* ┃ 🎧 *AUDIO FILE (VOICE NOTE)*\n` +
+                        `┃ ☘︎ *2* ┃ 📁 *DOCUMENT FILE*\n` +
+                        `┃\n` +
+                        `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                        `> *📌 REPLY TO THIS MESSAGE WITH 1 OR 2* ✨\n` +
+                        `> *⚡ Powered by SACHIYA MD 💫*`;
 
-📌 *TITLE:* ${title}
-👤 *ARTIST/CHANNEL:* ${author}
-⏱️ *DURATION:* ${duration}
-👁️ *VIEWS:* ${views}
-🔗 *LINK:* ${videoUrl}
-
-╭─── [ 📥 *SELECT AN OPTION* ] ───⊷
-│ ☘︎ *1* ┃ 🎧 *AUDIO FILE (VOICE NOTE)*
-│ ☘︎ *2* ┃ 📁 *DOCUMENT FILE*
-╰───────────────⊷
-
-> 📌 *REPLY TO THIS MESSAGE WITH 1 OR 2*
-> ✦ *POWERED BY DCT-MD WA BOT*
-`;
-
-        // Send Details Message
+        // Send Details Message with External AdReply (WhatsApp Rich Preview Style)
         let sentMsg;
         if (thumbnail) {
-            sentMsg = await conn.sendMessage(from, { image: { url: thumbnail }, caption: descMsg }, { quoted: mek });
+            sentMsg = await conn.sendMessage(from, { 
+                image: { url: thumbnail }, 
+                caption: descMsg,
+                contextInfo: {
+                    externalAdReply: {
+                        title: title,
+                        body: `🎵 SACHIYA-MD MUSIC PLAYER • ${author}`,
+                        thumbnailUrl: thumbnail,
+                        sourceUrl: videoUrl,
+                        mediaType: 2,
+                        renderLargerThumbnail: true
+                    }
+                }
+            }, { quoted: mek });
         } else {
             sentMsg = await conn.sendMessage(from, { text: descMsg }, { quoted: mek });
         }
@@ -80,7 +92,7 @@ async (conn, mek, m, { from, q, reply }) => {
                 conn.ev.off("messages.upsert", listener);
 
                 await conn.sendMessage(from, { react: { text: "📥", key: msg.key } });
-                await conn.sendMessage(from, { text: "⏳ *DOWNLOADING AUDIO... PLEASE WAIT!*" }, { quoted: msg });
+                await conn.sendMessage(from, { text: "⏳ *DOWNLOADING AUDIO... PLEASE WAIT!* 🔄" }, { quoted: msg });
 
                 try {
                     // Fetch Download URL
@@ -108,19 +120,30 @@ async (conn, mek, m, { from, q, reply }) => {
 
                     const buffer = Buffer.from(audioResponse.data);
 
-                    // Send requested format
+                    // Send requested format with nice rich player look
                     if (userChoice === "1") {
                         await conn.sendMessage(from, {
                             audio: buffer,
                             mimetype: "audio/mpeg",
-                            fileName: `${title}.mp3`
+                            fileName: `${title}.mp3`,
+                            ptt: false,
+                            contextInfo: {
+                                externalAdReply: {
+                                    title: title,
+                                    body: "🎵 SACHIYA-MD MUSIC PLAYER",
+                                    thumbnailUrl: thumbnail,
+                                    sourceUrl: videoUrl,
+                                    mediaType: 2,
+                                    renderLargerThumbnail: true
+                                }
+                            }
                         }, { quoted: msg });
                     } else if (userChoice === "2") {
                         await conn.sendMessage(from, {
                             document: buffer,
                             mimetype: "audio/mpeg",
                             fileName: `${title}.mp3`,
-                            caption: `🎵 *${title}*`
+                            caption: `╭━━━〔 *${title}* 〕━━━\n┃ 🎵 *Status:* Downloaded Successfully!\n╰━━━━━━━━━━━━━━━━━━━`
                         }, { quoted: msg });
                     }
 
