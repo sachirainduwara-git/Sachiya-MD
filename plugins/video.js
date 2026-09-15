@@ -1,18 +1,19 @@
 /**
  * ----------------------------------------------------------------------------
  * Project Name : SACHIYA-MD
- * Plugin       : Video Downloader (Interactive Reply Option)
+ * Plugin       : Advanced Video Downloader (Dedicated Video APIs)
  * Author       : SACHIYA-MD Dev Team
- * Description  : Advanced YouTube Video Downloader with multi-option selection
+ * Description  : YouTube Video Downloader using official Video Info & File APIs
  * ----------------------------------------------------------------------------
  */
 
 const { cmd } = require("../command");
 const axios = require("axios");
 
-const API_KEY = "hashu_a70f3f6beed64bebddc7c36026f813f5";
-const SEARCH_API = "https://hashu-apis-production.up.railway.app/api/song/search";
-const DOWNLOAD_API = "https://hashu-apis-production.up.railway.app/api/ytdl";
+// අලුතෙන් දීපු API Key එක සහ නිවැරදි Endpoint දෙක
+const API_KEY = "hashu_3ae2e68412fd1ef2c0b0da3f2959e1d0";
+const VIDEO_INFO_API = "https://hashu-apis-production.up.railway.app/api/video/info";
+const VIDEO_FILE_API = "https://hashu-apis-production.up.railway.app/api/video/file";
 
 // ─── HELPER FUNCTIONS & ADVANCED LOGIC HANDLERS ─── //
 
@@ -21,26 +22,26 @@ function formatViews(views) {
     return typeof views === 'number' ? views.toLocaleString() : views;
 }
 
-async function fetchVideoMetadata(query) {
+async function fetchVideoInfo(query) {
     try {
-        const response = await axios.get(`${SEARCH_API}?apiKey=${API_KEY}&text=${encodeURIComponent(query)}`, {
+        const response = await axios.get(`${VIDEO_INFO_API}?apiKey=${API_KEY}&text=${encodeURIComponent(query)}`, {
             timeout: 30000
         });
         return response.data;
     } catch (err) {
-        console.error("Video Search API Error:", err.message);
+        console.error("Video Info API Error:", err.message);
         return null;
     }
 }
 
-async function fetchVideoDownloadLink(videoUrl, fileType) {
+async function fetchVideoFileLink(videoUrl) {
     try {
-        const response = await axios.get(`${DOWNLOAD_API}?apiKey=${API_KEY}&text=${encodeURIComponent(videoUrl)}&type=${fileType}`, {
+        const response = await axios.get(`${VIDEO_FILE_API}?apiKey=${API_KEY}&url=${encodeURIComponent(videoUrl)}`, {
             timeout: 60000
         });
         return response.data;
     } catch (err) {
-        console.error("Video Download API Error:", err.message);
+        console.error("Video File API Error:", err.message);
         return null;
     }
 }
@@ -51,7 +52,7 @@ cmd({
     pattern: "video",
     alias: ["vid", "mp4", "movie"],
     react: "🎥",
-    desc: "Search and Download YouTube Videos with Interactive Options",
+    desc: "Search and Download YouTube Videos using dedicated APIs without freezing",
     category: "download",
     filename: __filename
 },
@@ -69,20 +70,21 @@ async (conn, mek, m, { from, q, reply }) => {
         // Initial response status notification
         await reply("🔍 *SEARCHING FOR YOUR VIDEO... PLEASE WAIT* 🎬");
 
-        // 1. Search Video Data from API
-        const searchData = await fetchVideoMetadata(q);
+        // 1. Fetch Video Metadata using Info API
+        const infoData = await fetchVideoInfo(q);
 
-        if (!searchData || !searchData.success || !searchData.results || searchData.results.length === 0) {
+        if (!infoData || (!infoData.success && !infoData.results && !infoData.url)) {
             return reply("❌ *VIDEO NOT FOUND! PLEASE TRY ANOTHER QUERY OR CHECK THE LINK.*");
         }
 
-        const video = searchData.results[0];
-        const videoUrl = video.url || video.link;
-        const title = video.title || "YouTube Video";
-        const duration = video.duration || "N/A";
-        const views = formatViews(video.views);
-        const author = video.author || video.channel || "N/A";
-        const thumbnail = video.thumbnail || video.image;
+        // Handle various possible JSON response structures safely
+        const videoInfo = infoData.results || infoData;
+        const videoUrl = videoInfo.url || videoInfo.link || q;
+        const title = videoInfo.title || "YouTube Video";
+        const duration = videoInfo.duration || videoInfo.timestamp || "N/A";
+        const views = formatViews(videoInfo.views);
+        const author = videoInfo.author || videoInfo.channel || "N/A";
+        const thumbnail = videoInfo.thumbnail || videoInfo.image || "";
 
         // ─── UI DESIGN & CAPTION FORMATTING (Border Style) ─── //
         const descMsg = `╭━━━〔 *SACHIYA-MD VIDEO MANAGER* 〕━━━\n` +
@@ -147,23 +149,24 @@ async (conn, mek, m, { from, q, reply }) => {
                     await conn.sendMessage(from, { react: { text: "📥", key: msg.key } });
                     await conn.sendMessage(from, { text: "⏳ *DOWNLOADING VIDEO STREAM... PLEASE WAIT!* 🔄" }, { quoted: msg });
 
-                    // 2. Fetch Video Download URL (mp4 type)
-                    const dlData = await fetchVideoDownloadLink(videoUrl, "mp4");
+                    // 2. Fetch Video Direct Download Link using File API
+                    const fileData = await fetchVideoFileLink(videoUrl);
                     
-                    if (!dlData) {
-                        return conn.sendMessage(from, { text: "❌ *CONNECTION FAILED WHILE FETCHING DOWNLOAD DATA!*" }, { quoted: msg });
+                    if (!fileData) {
+                        return conn.sendMessage(from, { text: "❌ *CONNECTION FAILED WHILE FETCHING FILE DATA FROM API!*" }, { quoted: msg });
                     }
 
-                    const videoLink = dlData?.results?.direct_link || dlData?.results?.dl_link || dlData?.url || dlData?.download;
+                    // Extract direct download link safely from various keys
+                    const directVideoLink = fileData?.results?.download || fileData?.results?.direct_link || fileData?.results?.dl_link || fileData?.download || fileData?.url;
 
-                    if (!videoLink) {
-                        return conn.sendMessage(from, { text: "❌ *FAILED TO RETRIEVE VIDEO DOWNLOAD LINK FROM SERVER!*" }, { quoted: msg });
+                    if (!directVideoLink) {
+                        return conn.sendMessage(from, { text: "❌ *FAILED TO RETRIEVE VIDEO DIRECT LINK FROM SERVER!*" }, { quoted: msg });
                     }
 
                     // 3. Download Binary Buffer safely with custom security headers
                     const videoResponse = await axios({
                         method: 'GET',
-                        url: videoLink,
+                        url: directVideoLink,
                         responseType: 'arraybuffer',
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -172,7 +175,7 @@ async (conn, mek, m, { from, q, reply }) => {
                             'Accept': '*/*'
                         },
                         maxRedirects: 10,
-                        timeout: 120000 // 2 minutes timeout for large files
+                        timeout: 120000 // 2 minutes timeout for heavy video files
                     });
 
                     const buffer = Buffer.from(videoResponse.data);
@@ -202,7 +205,7 @@ async (conn, mek, m, { from, q, reply }) => {
                         }, { quoted: msg });
 
                     } else if (userChoice === "2") {
-                        // Send as Document file (Highest stability for heavy files)
+                        // Send as Document file (Highest stability for large files)
                         await conn.sendMessage(from, {
                             document: buffer,
                             mimetype: "video/mp4",
