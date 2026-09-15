@@ -5,7 +5,7 @@ const axios = require('axios');
 cmd({
     pattern: "song",
     alias: ["audio", "play"],
-    desc: "Download YouTube songs using Hashu Paid API",
+    desc: "Download YouTube songs safely using multi-API fallback",
     category: "download",
     react: "🎵",
     filename: __filename
@@ -25,31 +25,62 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
         const videoUrl = video.url;
         const encodedUrl = encodeURIComponent(videoUrl);
 
-        const apiKey = "hashu_33b70902c0489263d4eb64fe4e49dad5";
-        const apiUrl = `https://hashu-apis-production.up.railway.app/api/ytdl?apiKey=${apiKey}&text=${encodedUrl}&type=mp3`;
+        let dlUrl = '';
+        let title = video.title;
+        let thumbnail = video.thumbnail;
 
-        // 302 Redirect එරර් එක මඟහරවා ගැනීමට maxRedirects එක්ක axios කෝල් එක
-        const res = await axios.get(apiUrl, { 
-            timeout: 60000,
-            maxRedirects: 5,
-            validateStatus: function (status) {
-                return status >= 200 && status < 400; // 302 සහ අනෙකුත් redirects හැdle කරගැනීමට
+        // 1. Hashu Paid API
+        try {
+            const hashuRes = await axios.get(`https://hashu-apis-production.up.railway.app/api/ytdl?apiKey=hashu_33b70902c0489263d4eb64fe4e49dad5&text=${encodedUrl}&type=mp3`, { timeout: 25000 });
+            const data = hashuRes.data;
+            if (data) {
+                dlUrl = data.download || data.dl_url || data.url || data.result?.download || data.result?.dl_url || data.result?.url;
+                if (data.title || data.result?.title) title = data.title || data.result?.title;
+                if (data.thumbnail || data.result?.thumbnail) thumbnail = data.thumbnail || data.result?.thumbnail;
             }
-        });
+        } catch (e) {}
 
-        const apiData = res.data;
-        if (!apiData) {
-            return reply("❌ *Failed to fetch response from download server!*");
+        // 2. Gifted Tech API (Fallback 1)
+        if (!dlUrl) {
+            try {
+                const giftedRes = await axios.get(`https://api.giftedtech.my.id/api/download/ytmp3?apikey=gifted&url=${encodedUrl}`, { timeout: 25000 });
+                const data = giftedRes.data;
+                if (data && data.result) {
+                    dlUrl = data.result.dl_url || data.result.download_url || data.result;
+                    if (data.result.title) title = data.result.title;
+                }
+            } catch (e) {}
         }
 
-        const dlUrl = apiData.download || apiData.dl_url || apiData.result?.download || apiData.result?.dl_url || apiData.url;
-        const title = apiData.title || apiData.result?.title || video.title;
-        const thumbnail = apiData.thumbnail || apiData.result?.thumbnail || video.thumbnail;
+        // 3. David Cyril Tech API (Fallback 2)
+        if (!dlUrl) {
+            try {
+                const davidRes = await axios.get(`https://apis.davidcyriltech.my.id/youtube/mp3?url=${encodedUrl}`, { timeout: 25000 });
+                const data = davidRes.data;
+                if (data && data.status && data.result) {
+                    dlUrl = data.result.download_url;
+                    if (data.result.title) title = data.result.title;
+                }
+            } catch (e) {}
+        }
+
+        // 4. Darks MD API (Fallback 3)
+        if (!dlUrl) {
+            try {
+                const darkRes = await axios.get(`https://api.darks-md.site/api/download/ytmp3?url=${encodedUrl}`, { timeout: 25000 });
+                const data = darkRes.data;
+                if (data && data.result) {
+                    dlUrl = data.result.download || data.result.dl_url;
+                    if (data.result.title) title = data.result.title;
+                }
+            } catch (e) {}
+        }
 
         if (!dlUrl) {
-            return reply("❌ *Could not generate audio download link from API!*");
+            return reply("❌ *Could not generate audio download link from any servers. Please try again later!*");
         }
 
+        // බොට්ගේ ස්ටයිල් එකටම හැදූ UI Border Caption එක
         let desc = `╭━━━〔 *SACHIYA-MD MUSIC PLAYER* 〕━━━\n` +
                    `┃\n` +
                    `┃ 📌 *Title:* ${title}\n` +
