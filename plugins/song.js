@@ -34,13 +34,13 @@ async (conn, mek, m, { from, q, reply }) => {
         const author = video.author || "N/A";
         const thumbnail = video.thumbnail;
 
-        // උඹ ඉල්ලපු විදිහට බොට්ගේ ස්ටයිල් එකටම හැදූ පට්ට ලස්සන UI Border Caption එක
         const descMsg = `╭━━━〔 *SACHIYA-MD MUSIC PLAYER* 〕━━━\n` +
                         `┃\n` +
                         `┃ 📌 *TITLE:* ${title}\n` +
-                        `┃ 👤 *ARTIST:* ${author}\n` +
+                        `┃ 👤 *ARTIST/CHANNEL:* ${author}\n` +
                         `┃ ⏱️ *DURATION:* ${duration}\n` +
-                        `┃ 👀 *VIEWS:* ${views}\n` +
+                        `┃ 👁️ *VIEWS:* ${views}\n` +
+                        `┃ 🔗 *LINK:* ${videoUrl}\n` +
                         `┃\n` +
                         `┣━━━〔 📥 *SELECT AN OPTION* 〕━━━\n` +
                         `┃\n` +
@@ -48,26 +48,13 @@ async (conn, mek, m, { from, q, reply }) => {
                         `┃ ☘︎ *2* ┃ 📁 *DOCUMENT FILE*\n` +
                         `┃\n` +
                         `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                        `> *📌 REPLY TO THIS MESSAGE WITH 1 OR 2* ✨\n` +
-                        `> *⚡ Powered by SACHIYA MD 💫*`;
+                        `> 📌 *REPLY TO THIS MESSAGE WITH 1 OR 2*\n` +
+                        `> ✦ *POWERED BY SACHIYA MD* ✨`;
 
-        // Send Details Message with External AdReply (WhatsApp Rich Preview Style)
+        // Send Details Message
         let sentMsg;
         if (thumbnail) {
-            sentMsg = await conn.sendMessage(from, { 
-                image: { url: thumbnail }, 
-                caption: descMsg,
-                contextInfo: {
-                    externalAdReply: {
-                        title: title,
-                        body: `🎵 SACHIYA-MD MUSIC PLAYER • ${author}`,
-                        thumbnailUrl: thumbnail,
-                        sourceUrl: videoUrl,
-                        mediaType: 2,
-                        renderLargerThumbnail: true
-                    }
-                }
-            }, { quoted: mek });
+            sentMsg = await conn.sendMessage(from, { image: { url: thumbnail }, caption: descMsg }, { quoted: mek });
         } else {
             sentMsg = await conn.sendMessage(from, { text: descMsg }, { quoted: mek });
         }
@@ -120,30 +107,19 @@ async (conn, mek, m, { from, q, reply }) => {
 
                     const buffer = Buffer.from(audioResponse.data);
 
-                    // Send requested format with nice rich player look
+                    // Send requested format
                     if (userChoice === "1") {
                         await conn.sendMessage(from, {
                             audio: buffer,
                             mimetype: "audio/mpeg",
-                            fileName: `${title}.mp3`,
-                            ptt: false,
-                            contextInfo: {
-                                externalAdReply: {
-                                    title: title,
-                                    body: "🎵 SACHIYA-MD MUSIC PLAYER",
-                                    thumbnailUrl: thumbnail,
-                                    sourceUrl: videoUrl,
-                                    mediaType: 2,
-                                    renderLargerThumbnail: true
-                                }
-                            }
+                            fileName: `${title}.mp3`
                         }, { quoted: msg });
                     } else if (userChoice === "2") {
                         await conn.sendMessage(from, {
                             document: buffer,
                             mimetype: "audio/mpeg",
                             fileName: `${title}.mp3`,
-                            caption: `╭━━━〔 *${title}* 〕━━━\n┃ 🎵 *Status:* Downloaded Successfully!\n╰━━━━━━━━━━━━━━━━━━━`
+                            caption: `🎵 *${title}*`
                         }, { quoted: msg });
                     }
 
