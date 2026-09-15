@@ -1,387 +1,143 @@
 const { cmd } = require("../command");
+const axios = require("axios");
 
-const API_KEY = "hashu_33b70902c0489263d4eb64fe4e49dad5";
+const API_KEY = "hashu_a70f3f6beed64bebddc7c36026f813f5";
 const SEARCH_API = "https://hashu-apis-production.up.railway.app/api/song/search";
 const DOWNLOAD_API = "https://hashu-apis-production.up.railway.app/api/ytdl";
 
-cmd(
-  {
+cmd({
     pattern: "song",
-    alias: ["music", "mp3", "ytsong"],
     react: "🎵",
-    desc: "Search and download songs",
+    desc: "Search and Download Songs with Reply Options",
     category: "download",
-    filename: __filename,
-  },
-
-  async (
-    sachiya,
-    mek,
-    m,
-    {
-      from,
-      q,
-      reply,
-      pushname,
-    }
-  ) => {
+    filename: __filename
+},
+async (conn, mek, m, { from, q, reply }) => {
     try {
-      // ─────────────────────────────
-      // CHECK QUERY
-      // ─────────────────────────────
-      if (!q) {
-        return reply(
-          "🎵 *SONG DOWNLOADER*\n\n" +
-          "Please enter a song name.\n\n" +
-          "*Example:*\n" +
-          "`.song Ma Diha`\n\n" +
-          "`.song Shape Of You`"
-        );
-      }
+        if (!q) return reply("⚠️ *PLEASE PROVIDE A SONG TITLE OR YOUTUBE LINK!*\n\n*Example:* `.song Ma diha`");
 
-      const userName = pushname || m.pushName || "User";
+        reply("🔍 *SEARCHING FOR YOUR SONG...*");
 
-      await sachiya.sendMessage(from, {
-        react: {
-          text: "🔎",
-          key: mek.key,
-        },
-      });
+        // 1. Search Request
+        const searchRes = await axios.get(`${SEARCH_API}?apiKey=${API_KEY}&text=${encodeURIComponent(q)}`);
+        const searchData = searchRes.data;
 
-      // ─────────────────────────────
-      // SEARCH SONG
-      // ─────────────────────────────
-      const searchURL =
-        `${SEARCH_API}?apiKey=${encodeURIComponent(API_KEY)}` +
-        `&text=${encodeURIComponent(q)}`;
-
-      const response = await fetch(searchURL);
-
-      if (!response.ok) {
-        throw new Error(`Search API Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (
-        !data ||
-        !data.success ||
-        !Array.isArray(data.results) ||
-        data.results.length === 0
-      ) {
-        await sachiya.sendMessage(from, {
-          react: {
-            text: "❌",
-            key: mek.key,
-          },
-        });
-
-        return reply(
-          `❌ *No songs found for:* ${q}\n\n` +
-          `Try another song name.`
-        );
-      }
-
-      const songs = data.results.slice(0, 10);
-
-      // ─────────────────────────────
-      // BUILD SEARCH LIST
-      // ─────────────────────────────
-      let menu = `╭━━━〔 *🎵 SONG SEARCH* 〕━━━╮\n`;
-      menu += `┃\n`;
-      menu += `┃ 🔎 *Query:* ${q}\n`;
-      menu += `┃ 👤 *Requested by:* ${userName}\n`;
-      menu += `┃\n`;
-      menu += `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-
-      menu += `🎧 *SEARCH RESULTS*\n\n`;
-
-      songs.forEach((song, index) => {
-        const number = index + 1;
-
-        const title =
-          song.title && song.title.trim()
-            ? song.title.trim()
-            : "Unknown Title";
-
-        const author =
-          song.author && song.author.trim()
-            ? song.author.trim()
-            : "Unknown Artist";
-
-        const duration =
-          song.duration && song.duration.trim()
-            ? song.duration
-            : "Unknown";
-
-        const views =
-          typeof song.views === "number"
-            ? song.views.toLocaleString()
-            : song.views || "Unknown";
-
-        menu += `*${number}.* 🎵 ${title}\n`;
-        menu += `   👤 ${author}\n`;
-        menu += `   ⏱️ ${duration}  •  👀 ${views}\n\n`;
-      });
-
-      menu += `━━━━━━━━━━━━━━━━━━━━━━\n`;
-      menu += `📥 *Reply with a number to download*\n`;
-      menu += `Example: *1*\n\n`;
-      menu += `> *Powered by YOUR-MD ⚡*`;
-
-      // ─────────────────────────────
-      // SEND SEARCH RESULT
-      // ─────────────────────────────
-      const sentMsg = await sachiya.sendMessage(
-        from,
-        {
-          text: menu,
-        },
-        {
-          quoted: mek,
+        if (!searchData || !searchData.success || !searchData.results || searchData.results.length === 0) {
+            return reply("❌ *SONG NOT FOUND! PLEASE TRY ANOTHER QUERY.*");
         }
-      );
 
-      await sachiya.sendMessage(from, {
-        react: {
-          text: "🎶",
-          key: mek.key,
-        },
-      });
+        const video = searchData.results[0];
+        const videoUrl = video.url;
+        const title = video.title || "Song";
+        const duration = video.duration || "N/A";
+        const views = video.views ? video.views.toLocaleString() : "N/A";
+        const author = video.author || "N/A";
+        const thumbnail = video.thumbnail;
 
-      // Save search message ID
-      const messageID = sentMsg.key.id;
+        const descMsg = `
+🎵 *─── [ SONG DOWNLOADER ] ───* 🎵
 
-      // ─────────────────────────────
-      // REPLY LISTENER
-      // ─────────────────────────────
-      const handler = async (chatUpdate) => {
-        try {
-          const responseMsg = chatUpdate.messages?.[0];
+📌 *TITLE:* ${title}
+👤 *ARTIST/CHANNEL:* ${author}
+⏱️ *DURATION:* ${duration}
+👁️ *VIEWS:* ${views}
+🔗 *LINK:* ${videoUrl}
 
-          if (!responseMsg || !responseMsg.message) return;
+╭─── [ 📥 *SELECT AN OPTION* ] ───⊷
+│ ☘︎ *1* ┃ 🎧 *AUDIO FILE (VOICE NOTE)*
+│ ☘︎ *2* ┃ 📁 *DOCUMENT FILE*
+╰───────────────⊷
 
-          const remoteJid = responseMsg.key.remoteJid;
+> 📌 *REPLY TO THIS MESSAGE WITH 1 OR 2*
+> ✦ *POWERED BY DCT-MD WA BOT*
+`;
 
-          // Only same chat
-          if (remoteJid !== from) return;
-
-          const msg =
-            responseMsg.message.conversation ||
-            responseMsg.message.extendedTextMessage?.text ||
-            responseMsg.message.ephemeralMessage?.message
-              ?.extendedTextMessage?.text ||
-            responseMsg.message.ephemeralMessage?.message
-              ?.conversation;
-
-          if (!msg) return;
-
-          const selected = msg.trim();
-
-          // Must be 1-10
-          if (!/^(10|[1-9])$/.test(selected)) return;
-
-          // Check reply to OUR search message
-          const contextInfo =
-            responseMsg.message.extendedTextMessage?.contextInfo ||
-            responseMsg.message.ephemeralMessage?.message
-              ?.extendedTextMessage?.contextInfo;
-
-          if (!contextInfo) return;
-
-          if (contextInfo.stanzaId !== messageID) return;
-
-          const index = parseInt(selected) - 1;
-          const selectedSong = songs[index];
-
-          if (!selectedSong) {
-            return sachiya.sendMessage(
-              from,
-              {
-                text: "❌ *Invalid song selection!*",
-              },
-              {
-                quoted: responseMsg,
-              }
-            );
-          }
-
-          // ─────────────────────────
-          // REACT
-          // ─────────────────────────
-          await sachiya.sendMessage(from, {
-            react: {
-              text: "⏳",
-              key: responseMsg.key,
-            },
-          });
-
-          const title =
-            selectedSong.title || "Unknown Song";
-
-          const author =
-            selectedSong.author || "Unknown Artist";
-
-          const youtubeURL = selectedSong.url;
-
-          if (!youtubeURL) {
-            await sachiya.sendMessage(from, {
-              react: {
-                text: "❌",
-                key: responseMsg.key,
-              },
-            });
-
-            return sachiya.sendMessage(
-              from,
-              {
-                text: "❌ *This song doesn't have a valid YouTube URL.*",
-              },
-              {
-                quoted: responseMsg,
-              }
-            );
-          }
-
-          // ─────────────────────────
-          // DOWNLOAD API
-          // ─────────────────────────
-          const downloadURL =
-            `${DOWNLOAD_API}?apiKey=${encodeURIComponent(API_KEY)}` +
-            `&text=${encodeURIComponent(youtubeURL)}` +
-            `&type=mp3`;
-
-          const downloadResponse = await fetch(downloadURL);
-
-          if (!downloadResponse.ok) {
-            throw new Error(
-              `Download API Error: ${downloadResponse.status}`
-            );
-          }
-
-          const downloadData = await downloadResponse.json();
-
-          if (
-            !downloadData ||
-            !downloadData.success ||
-            !downloadData.results ||
-            !downloadData.results.direct_link
-          ) {
-            await sachiya.sendMessage(from, {
-              react: {
-                text: "❌",
-                key: responseMsg.key,
-              },
-            });
-
-            return sachiya.sendMessage(
-              from,
-              {
-                text:
-                  "❌ *Failed to download this song.*\n\n" +
-                  "The download server may be busy or the song may be unavailable.",
-              },
-              {
-                quoted: responseMsg,
-              }
-            );
-          }
-
-          const result = downloadData.results;
-
-          const directLink = result.direct_link;
-
-          const finalTitle =
-            result.title || title || "Downloaded Song";
-
-          // ─────────────────────────
-          // SEND AUDIO
-          // ─────────────────────────
-          await sachiya.sendMessage(
-            from,
-            {
-              audio: {
-                url: directLink,
-              },
-              mimetype: "audio/mpeg",
-              fileName:
-                `${finalTitle}`
-                  .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
-                  .slice(0, 100) + ".mp3",
-              ptt: false,
-            },
-            {
-              quoted: responseMsg,
-            }
-          );
-
-          await sachiya.sendMessage(from, {
-            react: {
-              text: "🎧",
-              key: responseMsg.key,
-            },
-          });
-
-          // ─────────────────────────
-          // DONE
-          // ─────────────────────────
-          await sachiya.sendMessage(
-            from,
-            {
-              text:
-                `╭━━━〔 *🎧 DOWNLOAD COMPLETE* 〕━━━╮\n` +
-                `┃\n` +
-                `┃ 🎵 *Title:* ${finalTitle}\n` +
-                `┃ 👤 *Artist:* ${author}\n` +
-                `┃ 📀 *Format:* MP3\n` +
-                `┃ 🎚️ *Quality:* ${result.quality || "128-320kbps"}\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-                `> *Powered by YOUR-MD ⚡*`,
-            },
-            {
-              quoted: responseMsg,
-            }
-          );
-
-          // Remove listener after successful download
-          sachiya.ev.off("messages.upsert", handler);
-        } catch (error) {
-          console.error("Song Reply Error:", error);
-
-          await sachiya.sendMessage(from, {
-            react: {
-              text: "❌",
-              key: mek.key,
-            },
-          }).catch(() => {});
+        // Send Details Message
+        let sentMsg;
+        if (thumbnail) {
+            sentMsg = await conn.sendMessage(from, { image: { url: thumbnail }, caption: descMsg }, { quoted: mek });
+        } else {
+            sentMsg = await conn.sendMessage(from, { text: descMsg }, { quoted: mek });
         }
-      };
 
-      sachiya.ev.on("messages.upsert", handler);
+        const messageID = sentMsg.key.id;
 
-      // ─────────────────────────────
-      // AUTO REMOVE LISTENER
-      // after 5 minutes
-      // ─────────────────────────────
-      setTimeout(() => {
-        sachiya.ev.off("messages.upsert", handler);
-      }, 5 * 60 * 1000);
+        // 2. Interactive Reply Listener
+        const listener = async ({ messages }) => {
+            const msg = messages[0];
+            if (!msg.message) return;
 
-    } catch (error) {
-      console.error("Song Downloader Error:", error);
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            const replyId = msg.message.extendedTextMessage?.contextInfo?.stanzaId;
 
-      await sachiya.sendMessage(from, {
-        react: {
-          text: "❌",
-          key: mek.key,
-        },
-      }).catch(() => {});
+            // Check if user replied to this exact message
+            if (replyId !== messageID) return;
 
-      return reply(
-        `❌ *Song Downloader Error*\n\n` +
-        `${error.message || "Something went wrong."}`
-      );
+            const userChoice = (text || "").trim();
+
+            if (userChoice === "1" || userChoice === "2") {
+                // Remove listener to prevent duplicate processing
+                conn.ev.off("messages.upsert", listener);
+
+                await conn.sendMessage(from, { react: { text: "📥", key: msg.key } });
+                await conn.sendMessage(from, { text: "⏳ *DOWNLOADING AUDIO... PLEASE WAIT!*" }, { quoted: msg });
+
+                try {
+                    // Fetch Download URL
+                    const dlRes = await axios.get(`${DOWNLOAD_API}?apiKey=${API_KEY}&text=${encodeURIComponent(videoUrl)}&type=mp3`);
+                    const dlData = dlRes.data;
+                    const audioLink = dlData?.results?.direct_link || dlData?.results?.dl_link;
+
+                    if (!audioLink) {
+                        return conn.sendMessage(from, { text: "❌ *FAILED TO RETRIEVE DOWNLOAD LINK!*" }, { quoted: msg });
+                    }
+
+                    // Download Audio Buffer with Bypass Headers
+                    const audioResponse = await axios({
+                        method: 'GET',
+                        url: audioLink,
+                        responseType: 'arraybuffer',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                            'Referer': 'https://youtube-mp36.p.rapidapi.com/',
+                            'Origin': 'https://youtube-mp36.p.rapidapi.com',
+                            'Accept': '*/*'
+                        },
+                        maxRedirects: 5
+                    });
+
+                    const buffer = Buffer.from(audioResponse.data);
+
+                    // Send requested format
+                    if (userChoice === "1") {
+                        await conn.sendMessage(from, {
+                            audio: buffer,
+                            mimetype: "audio/mpeg",
+                            fileName: `${title}.mp3`
+                        }, { quoted: msg });
+                    } else if (userChoice === "2") {
+                        await conn.sendMessage(from, {
+                            document: buffer,
+                            mimetype: "audio/mpeg",
+                            fileName: `${title}.mp3`,
+                            caption: `🎵 *${title}*`
+                        }, { quoted: msg });
+                    }
+
+                    await conn.sendMessage(from, { react: { text: "✅", key: msg.key } });
+
+                } catch (dlErr) {
+                    console.error("Download Step Error:", dlErr);
+                    await conn.sendMessage(from, { text: "❌ *AN ERROR OCCURRED WHILE DOWNLOADING THE AUDIO!*" }, { quoted: msg });
+                }
+            }
+        };
+
+        conn.ev.on("messages.upsert", listener);
+
+    } catch (e) {
+        console.error("====== SONG COMMAND ERROR ======");
+        console.error(e);
+        reply(`❌ *AN UNEXPECTED ERROR OCCURRED!*\n\n\`\`\`${e.message || "Unknown Error"}\`\`\``);
     }
-  }
-);
+});
