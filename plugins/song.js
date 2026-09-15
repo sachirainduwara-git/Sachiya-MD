@@ -5,103 +5,65 @@ const axios = require('axios');
 cmd({
     pattern: "song",
     alias: ["audio", "play"],
-    desc: "Download YouTube songs safely using multiple paid & free APIs with fallback",
+    desc: "Download YouTube songs using Hashu Paid API",
     category: "download",
     react: "🎵",
     filename: __filename
 },
 async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        if (!q) return reply("⚠️ Please give me a song name or YouTube link!\n\n*Example:* `.song Kella`");
+        if (!q) return reply("⚠️ *Please provide a song name or YouTube link!*\n\n*Example:* `.song Kella`");
         
-        await reply("🔍 *Searching for your song...*");
+        await reply("🔍 *Searching for your song... Please wait* 🎶");
 
+        // 1. YouTube Search කිරීම
         const search = await ytSearch(q);
         if (!search.videos || !search.videos.length) {
-            return reply("❌ No results found for your query!");
+            return reply("❌ *No results found for your query!*");
         }
 
         const video = search.videos[0];
         const videoUrl = video.url;
         const encodedUrl = encodeURIComponent(videoUrl);
 
-        let desc = `*─── ｢ SACHIYA-MD SONG DOWNLOADER ｣ ───*
+        // 2. Hashu API එකට Request එක යැවීම
+        const apiKey = "hashu_33b70902c0489263d4eb64fe4e49dad5";
+        const apiUrl = `https://hashu-apis-production.up.railway.app/api/ytdl?apiKey=${apiKey}&text=${encodedUrl}&type=mp3`;
 
-🎵 *Title:* ${video.title}
-⏱ *Duration:* ${video.timestamp}
-👀 *Views:* ${video.views}
-👤 *Author:* ${video.author.name}
-🔗 *URL:* ${videoUrl}
+        const res = await axios.get(apiUrl, { timeout: 60000 });
+        const apiData = res.data;
+        
+        if (!apiData) {
+            return reply("❌ *Failed to fetch response from download server!*");
+        }
 
-> *Downloading your audio, please wait...*`;
+        const dlUrl = apiData.download || apiData.dl_url || apiData.result?.download || apiData.result?.dl_url || apiData.url;
+        const title = apiData.title || apiData.result?.title || video.title;
+        const thumbnail = apiData.thumbnail || apiData.result?.thumbnail || video.thumbnail;
 
+        if (!dlUrl) {
+            return reply("❌ *Could not generate audio download link from API!*");
+        }
+
+        // 3. බොට්ගේ ස්ටයිල් එකටම හැදූ UI Border Caption එක
+        let desc = `╭━━━〔 *SACHIYA-MD MUSIC PLAYER* 〕━━━\n` +
+                   `┃\n` +
+                   `┃ 📌 *Title:* ${title}\n` +
+                   `┃ ⏱️ *Duration:* ${video.timestamp}\n` +
+                   `┃ 👀 *Views:* ${video.views}\n` +
+                   `┃ 👤 *Author:* ${video.author.name}\n` +
+                   `┃ 📥 *Status:* Downloading audio... 🔄\n` +
+                   `┃\n` +
+                   `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                   `> *⚡ Powered by SACHIYA MD 💫*`;
+
+        // තම්බ්නේල් එක සහ UI කැප්ෂන් එක යැවීම
         await sachiya.sendMessage(from, {
-            image: { url: video.thumbnail },
+            image: { url: thumbnail },
             caption: desc
         }, { quoted: mek });
 
-        let dlUrl = '';
-        let title = video.title;
-
-        // 1. Gifted Tech Paid API
-        if (!dlUrl) {
-            try {
-                const res = await axios.get(`https://api.giftedtech.my.id/api/download/ytmp3?apikey=gifted&url=${encodedUrl}`, { timeout: 30000 });
-                if (res.data && (res.data.success || res.data.status) && (res.data.result?.dl_url || res.data.result?.download_url || res.data.result)) {
-                    dlUrl = res.data.result.dl_url || res.data.result.download_url || res.data.result;
-                    if (res.data.result.title) title = res.data.result.title;
-                }
-            } catch (err) {}
-        }
-
-        // 2. David Cyril Tech API
-        if (!dlUrl) {
-            try {
-                const res = await axios.get(`https://apis.davidcyriltech.my.id/youtube/mp3?url=${encodedUrl}`, { timeout: 30000 });
-                if (res.data && res.data.status && res.data.result?.download_url) {
-                    dlUrl = res.data.result.download_url;
-                    if (res.data.result.title) title = res.data.result.title;
-                }
-            } catch (err) {}
-        }
-
-        // 3. Darks MD API
-        if (!dlUrl) {
-            try {
-                const res = await axios.get(`https://api.darks-md.site/api/download/ytmp3?url=${encodedUrl}`, { timeout: 30000 });
-                if (res.data && res.data.status && (res.data.result?.download || res.data.result?.dl_url)) {
-                    dlUrl = res.data.result.download || res.data.result.dl_url;
-                    if (res.data.result.title) title = res.data.result.title;
-                }
-            } catch (err) {}
-        }
-
-        // 4. Cobalt Tools API (Fallback)
-        if (!dlUrl) {
-            try {
-                const res = await axios.post('https://api.cobalt.tools/api/json', {
-                    url: videoUrl,
-                    isAudioOnly: true,
-                    aFormat: 'mp3'
-                }, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0'
-                    },
-                    timeout: 30000
-                });
-                if (res.data && (res.data.url || res.data.audio)) {
-                    dlUrl = res.data.url || res.data.audio;
-                }
-            } catch (err) {}
-        }
-
-        if (!dlUrl) {
-            return reply("❌ All download servers failed to generate an audio stream. Please try a different song or try again later!");
-        }
-
-        // WhatsApp වල සියලුම උපාංගවල (iPhone/Android) නිවැරදිව ප්ලේ වීමට audio/mpeg සහ audio/mp4 ලෙස යැවීම
+        // 4. WhatsApp වෙත නිවැරදි Audio File එක යැවීම
         await sachiya.sendMessage(from, {
             audio: { url: dlUrl },
             mimetype: 'audio/mpeg',
@@ -111,7 +73,7 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
                 externalAdReply: {
                     title: title,
                     body: "SACHIYA-MD MUSIC PLAYER",
-                    thumbnailUrl: video.thumbnail,
+                    thumbnailUrl: thumbnail,
                     sourceUrl: videoUrl,
                     mediaType: 2,
                     renderLargerThumbnail: true
@@ -121,6 +83,6 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
 
     } catch (e) {
         console.log("Song Download Error:", e);
-        reply(`❌ Error: ${e.message || e}`);
+        reply(`❌ *An error occurred:* ${e.message || e}`);
     }
 });
