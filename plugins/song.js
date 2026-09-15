@@ -16,7 +16,6 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
         
         await reply("🔍 *Searching for your song... Please wait* 🎶");
 
-        // 1. YouTube Search කිරීම
         const search = await ytSearch(q);
         if (!search.videos || !search.videos.length) {
             return reply("❌ *No results found for your query!*");
@@ -26,13 +25,19 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
         const videoUrl = video.url;
         const encodedUrl = encodeURIComponent(videoUrl);
 
-        // 2. Hashu API එකට Request එක යැවීම
         const apiKey = "hashu_33b70902c0489263d4eb64fe4e49dad5";
         const apiUrl = `https://hashu-apis-production.up.railway.app/api/ytdl?apiKey=${apiKey}&text=${encodedUrl}&type=mp3`;
 
-        const res = await axios.get(apiUrl, { timeout: 60000 });
+        // 302 Redirect එරර් එක මඟහරවා ගැනීමට maxRedirects එක්ක axios කෝල් එක
+        const res = await axios.get(apiUrl, { 
+            timeout: 60000,
+            maxRedirects: 5,
+            validateStatus: function (status) {
+                return status >= 200 && status < 400; // 302 සහ අනෙකුත් redirects හැdle කරගැනීමට
+            }
+        });
+
         const apiData = res.data;
-        
         if (!apiData) {
             return reply("❌ *Failed to fetch response from download server!*");
         }
@@ -45,7 +50,6 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
             return reply("❌ *Could not generate audio download link from API!*");
         }
 
-        // 3. බොට්ගේ ස්ටයිල් එකටම හැදූ UI Border Caption එක
         let desc = `╭━━━〔 *SACHIYA-MD MUSIC PLAYER* 〕━━━\n` +
                    `┃\n` +
                    `┃ 📌 *Title:* ${title}\n` +
@@ -57,13 +61,11 @@ async(sachiya, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) =
                    `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
                    `> *⚡ Powered by SACHIYA MD 💫*`;
 
-        // තම්බ්නේල් එක සහ UI කැප්ෂන් එක යැවීම
         await sachiya.sendMessage(from, {
             image: { url: thumbnail },
             caption: desc
         }, { quoted: mek });
 
-        // 4. WhatsApp වෙත නිවැරදි Audio File එක යැවීම
         await sachiya.sendMessage(from, {
             audio: { url: dlUrl },
             mimetype: 'audio/mpeg',
